@@ -1,7 +1,7 @@
 import os
 import csv
 import shutil
-import datetime
+from typing import Optional
 
 from llm_benchmark.benchmark.vllm_benchmark.benchmark_serving import (
     run_benchmark as vllm_run_benchmark,
@@ -9,6 +9,10 @@ from llm_benchmark.benchmark.vllm_benchmark.benchmark_serving import (
 from llm_benchmark.benchmark.llmperf.token_benchmark_ray import (
     run_token_benchmark as llmperf_run_benchmark,
 )
+from llm_benchmark.benchmark.litellm_proxy.token_benchmark_ray import (
+    run_token_benchmark as litellm_run_benchmark,
+)
+from llm_benchmark.benchmark.litellm_proxy.utils import compute_latency_factors
 from llm_benchmark.profiler.constants import VllmProfileLayer
 from llm_benchmark.profiler.record_function_tracer import RecordFunctionTracer
 
@@ -164,6 +168,7 @@ def run_benchmark(
     benchmark_script: str,
     result_dir: str = None,
     run_id: str = None,
+    env_values: Optional[dict] = None,
 ):
     # Set environment variables directly
     os.environ["OPENAI_API_KEY"] = "secret_abcdefg"
@@ -195,9 +200,23 @@ def run_benchmark(
             model, input_token, output_token, concurrency, base_url
         )
         result_output = format_vllm_result(result_output)
-    else:
+    elif benchmark_script == "llmperf":
         result_output = llmperf_run_benchmark(
             model, concurrency, concurrency, input_token, 0, output_token, 0
+        )
+        result_output = format_llmperf_result(result_output)
+    elif benchmark_script == "litellm_proxy":
+        litellm_master_key = env_values.get("LITELLM_MASTER_KEY")
+        if litellm_master_key is None:
+            raise ValueError("LITELLM_MASTER_KEY is not set in engine config")
+        request_metadata = {
+            "api_key": os.getenv("OPENAI_API_KEY"),
+            "litellm_proxy_url": base_url,
+            "litellm_master_key": litellm_master_key
+        }
+        latency_factors = compute_latency_factors(model, request_metadata=request_metadata)
+        result_output = litellm_run_benchmark(
+            model, concurrency, concurrency, input_token, 0, output_token, 0, llm_api="mock_litellm_proxy", request_metadata=request_metadata, latency_factors=latency_factors
         )
         result_output = format_llmperf_result(result_output)
 

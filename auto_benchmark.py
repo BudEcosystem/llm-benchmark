@@ -6,6 +6,7 @@ import hashlib
 import argparse
 import threading
 import itertools
+from argparse import Namespace
 
 from tqdm import tqdm
 from pathlib import Path
@@ -75,7 +76,7 @@ def save_checkpoint(checkpoint, savepath):
         json.dump(checkpoint, fp, indent=4)
 
 
-def warmup_benchmark(model, base_url, benchmark_script):
+def warmup_benchmark(model, base_url, benchmark_script, env_values=None):
     print("Running warmup benchmark")
     result = benchmark_tools.run_benchmark(
         model,
@@ -86,6 +87,7 @@ def warmup_benchmark(model, base_url, benchmark_script):
         benchmark_script,
         os.environ["PROFILER_RESULT_DIR"],
         "warmup",
+        env_values=env_values,
     )
 
 
@@ -151,11 +153,14 @@ def create_engine_config(engine_config_file):
 def run_benchmark(args, engine_config, run_config, checkpoint=None):
     checkpoint = checkpoint or {}
     base_url = f"http://localhost:{engine_config['args']['port']}/v1"
-    model = engine_config["args"].get("model") or engine_config["args"].get("model-path")
+    model = engine_config["args"].get("model") or engine_config["args"].get(
+        "model-path"
+    )
 
     engine_kwargs = {
+        "engine": args.engine,
         "docker_image": args.docker_image,
-        "env_values": engine_config["envs"] if engine_config else [],
+        "env_values": engine_config["envs"] if engine_config else {},
         "result_dir": os.environ["PROFILER_RESULT_DIR"],
         "extra_args": engine_config["args"] if engine_config else [],
         "device": args.device,
@@ -175,10 +180,15 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             "runs": {},
         }
 
+    engine_tools.save_engine_config(Namespace(**engine_config["args"]))
+    engine_tools.save_engine_envs(engine_config["envs"] if engine_config else {})
+
     if args.docker_image:
         try:
             container_id = single_node_controller.deploy_model(
-                engine_config_id=engine_config_id, port=engine_config["args"]["port"], **engine_kwargs
+                engine_config_id=engine_config_id,
+                port=engine_config["args"]["port"],
+                **engine_kwargs,
             )
         except Exception as e:
             print(f"Error during {engine_config_id} deployment: {e}")
@@ -196,7 +206,7 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             return checkpoint
 
     try:
-        warmup_benchmark(model, base_url, args.benchmark_script)
+        warmup_benchmark(model, base_url, args.benchmark_script, env_values=engine_config["envs"] if engine_config else None)
     except Exception as e:
         print(f"Error during {engine_config_id} warm up: {e}")
         checkpoint[engine_config_hash]["status"] = "warmup_failed"
@@ -262,6 +272,7 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
                 args.benchmark_script,
                 os.environ["PROFILER_RESULT_DIR"],
                 run_id,
+                env_values=engine_config["envs"] if engine_config else None,
             )
 
             result["engine"] = args.engine
@@ -272,14 +283,14 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             result["concurrency"] = config["concurrency"]
 
             model_analysis = model_tools.infer(
-                model_name=model, 
+                model_name=model,
                 device_config=device_config,
-                seq_len=config["input_tokens"], 
-                num_tokens_to_generate=config["output_tokens"], 
+                seq_len=config["input_tokens"],
+                num_tokens_to_generate=config["output_tokens"],
                 batch_size_per_gpu=config["concurrency"],
                 tp_size=engine_config["args"].get("tensor-parallel-size", 1),
                 output_dir=os.environ["PROFILER_RESULT_DIR"],
-                run_id=run_id
+                run_id=run_id,
             )
 
             results.append(result)
@@ -351,7 +362,9 @@ def main(args):
         )
 
     if args.profile_hardware:
-        hardware_info = hardware_tools.get_hardware_info(output_dir=os.environ["PROFILER_RESULT_DIR"])
+        hardware_info = hardware_tools.get_hardware_info(
+            output_dir=os.environ["PROFILER_RESULT_DIR"]
+        )
 
 
 if __name__ == "__main__":
@@ -372,7 +385,7 @@ if __name__ == "__main__":
         "--engine",
         type=str,
         default="vllm",
-        choices=["vllm", "sglang"],
+        choices=["vllm", "sglang", "litellm_proxy"],
         help="The engine to be used for the testing.",
     )
     args.add_argument(

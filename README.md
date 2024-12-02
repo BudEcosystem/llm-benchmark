@@ -12,6 +12,12 @@ pip install -r requirements.txt
 ## Run
 
 ```bash
+export PROFILER_RESULT_DIR=/path/to/result/dir
+# for litellm_proxy
+export OPENAI_API_KEY=fake-api-key
+```
+
+```bash
 python auto_bemchmark.py --model meta-llama/Meta-Llama-3-8B-Instruct --docker-image IMAGE_ID --input-tokens 100 --output-tokens 100 --concurrency 1
 ```
 
