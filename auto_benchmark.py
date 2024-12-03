@@ -20,6 +20,7 @@ from llm_benchmark.hardware import tools as hardware_tools
 from llm_benchmark.hardware import monitor as hw_monitor
 from llm_benchmark.engine import tools as engine_tools
 from llm_benchmark.model import analysis as model_tools
+from llm_benchmark.benchmark.litellm_proxy.utils import compute_latency_factors
 
 
 def create_config(run_config):
@@ -76,9 +77,9 @@ def save_checkpoint(checkpoint, savepath):
         json.dump(checkpoint, fp, indent=4)
 
 
-def warmup_benchmark(model, base_url, benchmark_script, env_values=None):
+def warmup_benchmark(model, base_url, benchmark_script, env_values=None, latency_factors=None):
     print("Running warmup benchmark")
-    result = benchmark_tools.run_benchmark(
+    _ = benchmark_tools.run_benchmark(
         model,
         base_url,
         250,
@@ -88,6 +89,7 @@ def warmup_benchmark(model, base_url, benchmark_script, env_values=None):
         os.environ["PROFILER_RESULT_DIR"],
         "warmup",
         env_values=env_values,
+        latency_factors=latency_factors,
     )
 
 
@@ -180,8 +182,8 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             "runs": {},
         }
 
-    engine_tools.save_engine_config(Namespace(**engine_config["args"]))
-    engine_tools.save_engine_envs(engine_config["envs"] if engine_config else {})
+    engine_tools.save_engine_config(engine_config_id, Namespace(**engine_config["args"]))
+    engine_tools.save_engine_envs(engine_config_id, engine_config["envs"] if engine_config else {})
 
     if args.docker_image:
         try:
@@ -209,6 +211,8 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
         warmup_benchmark(model, base_url, args.benchmark_script, env_values=engine_config["envs"] if engine_config else None)
     except Exception as e:
         print(f"Error during {engine_config_id} warm up: {e}")
+        if container_id:
+            single_node_controller.remove_container(container_id)
         checkpoint[engine_config_hash]["status"] = "warmup_failed"
         return checkpoint
 
@@ -220,6 +224,15 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
 
     try:
         configs = create_config(run_config)
+        latency_factors = None
+        if args.engine == "litellm_proxy":
+            litellm_master_key = engine_config["envs"].get("LITELLM_MASTER_KEY")
+            request_metadata = {
+                "api_key": os.getenv("OPENAI_API_KEY"),
+                "litellm_proxy_url": base_url,
+                "litellm_master_key": litellm_master_key
+            }
+            latency_factors = compute_latency_factors(model, request_metadata=request_metadata)
         for config in tqdm(configs, desc="Running benchmarks"):
             print(config)
             run_config_hash = hashlib.sha1(
@@ -273,6 +286,7 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
                 os.environ["PROFILER_RESULT_DIR"],
                 run_id,
                 env_values=engine_config["envs"] if engine_config else None,
+                latency_factors=latency_factors,
             )
 
             result["engine"] = args.engine
@@ -282,16 +296,17 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             result["output_tokens"] = config["output_tokens"]
             result["concurrency"] = config["concurrency"]
 
-            model_analysis = model_tools.infer(
-                model_name=model,
-                device_config=device_config,
-                seq_len=config["input_tokens"],
-                num_tokens_to_generate=config["output_tokens"],
-                batch_size_per_gpu=config["concurrency"],
-                tp_size=engine_config["args"].get("tensor-parallel-size", 1),
-                output_dir=os.environ["PROFILER_RESULT_DIR"],
-                run_id=run_id,
-            )
+            if args.engine != "litellm_proxy":
+                _ = model_tools.infer(
+                    model_name=model,
+                    device_config=device_config,
+                    seq_len=config["input_tokens"],
+                    num_tokens_to_generate=config["output_tokens"],
+                    batch_size_per_gpu=config["concurrency"],
+                    tp_size=engine_config["args"].get("tensor-parallel-size", 1),
+                    output_dir=os.environ["PROFILER_RESULT_DIR"],
+                    run_id=run_id,
+                )
 
             results.append(result)
 

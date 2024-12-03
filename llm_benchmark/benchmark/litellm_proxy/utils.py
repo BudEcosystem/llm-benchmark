@@ -154,7 +154,7 @@ def compute_latency_factors(model: str, request_metadata: Dict[str, Any]) -> Dic
         run_token_benchmark as litellm_run_benchmark,
 )
     from llm_benchmark.benchmark.tools import format_llmperf_result
-    num_completed_requests = 5
+    num_completed_requests = 3
     mean_input_token = 100
     stddev_input_token = 20
     mean_output_token = 100
