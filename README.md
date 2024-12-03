@@ -13,7 +13,8 @@ pip install -r requirements.txt
 
 ```bash
 export PROFILER_RESULT_DIR=/path/to/result/dir
-# for litellm_proxy
+# for litellm_proxy benchmarking - to compute latency factors T_base, T_input, T_output
+# Formula : T_total = T_base + T_input * N_input + T_output * N_output
 export OPENAI_API_KEY=fake-api-key
 ```
 
@@ -21,6 +22,11 @@ export OPENAI_API_KEY=fake-api-key
 python auto_bemchmark.py --model meta-llama/Meta-Llama-3-8B-Instruct --docker-image IMAGE_ID --input-tokens 100 --output-tokens 100 --concurrency 1
 ```
 
+Litellm proxy benchmarking
+
+```bash
+python auto_benchmark.py --docker-image ghcr.io/berriai/litellm:main-latest --engine litellm_proxy --engine-config-file example/litellm_proxy_cpu.yaml --benchmark-script litellm_proxy --run-benchmark --device cpu
+```
 
 ## Add profiler in model class
 
