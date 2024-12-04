@@ -17,13 +17,13 @@ def get_engine_dir(engine_config_id=None):
     )
 
 
-def save_engine_config(args):
+def save_engine_config(engine_config_id, args):
     config_dict = {}
     for item in vars(args):
         config_dict[item] = getattr(args, item)
         if callable(config_dict[item]):
             config_dict[item] = str(config_dict[item])
-    engine_dir = get_engine_dir()
+    engine_dir = get_engine_dir(engine_config_id)
     os.makedirs(engine_dir, exist_ok=True)
     print("Saving engine config to", engine_dir)
     with open(os.path.join(engine_dir, "engine_config.json"), "w") as f:
@@ -32,11 +32,11 @@ def save_engine_config(args):
     print(f"Engine config saved to {os.path.join(engine_dir, 'engine_config.json')}")
 
 
-def save_engine_envs(envs):
+def save_engine_envs(engine_config_id, envs):
     envs_dict = {}
     for k, v in envs.items():
-        envs_dict[k] = v()
-    engine_dir = get_engine_dir()
+        envs_dict[k] = v
+    engine_dir = get_engine_dir(engine_config_id)
     os.makedirs(engine_dir, exist_ok=True)
     with open(os.path.join(engine_dir, "engine_envs.json"), "w") as f:
         json.dump(envs_dict, f, indent=4)
