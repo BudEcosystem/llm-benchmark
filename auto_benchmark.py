@@ -208,7 +208,10 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             return checkpoint
 
     try:
-        warmup_benchmark(model, base_url, args.benchmark_script, env_values=engine_config["envs"] if engine_config else None)
+        latency_factors = None
+        if args.engine == "litellm_proxy":
+            latency_factors = {"T_base": 0.5, "T_input": 0.5, "T_output": 0.5}
+        warmup_benchmark(model, base_url, args.benchmark_script, env_values=engine_config["envs"] if engine_config else None, latency_factors=latency_factors)
     except Exception as e:
         print(f"Error during {engine_config_id} warm up: {e}")
         if container_id:
