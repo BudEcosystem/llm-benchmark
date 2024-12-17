@@ -10,3 +10,5 @@ data
 *.log
 
 .venv/
+venv/
+myenv/
