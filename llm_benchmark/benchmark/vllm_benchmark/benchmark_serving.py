@@ -63,6 +63,10 @@ class BenchmarkMetrics:
     output_throughput: float
     total_token_throughput: float
     mean_request_throughput: float
+    mean_otpr_ts: float
+    median_otpr_ts: float
+    std_otpr_ts: float
+    percentiles_otpr_ts: List[Tuple[float, float]]
     mean_ttft_ms: float
     median_ttft_ms: float
     std_ttft_ms: float
@@ -255,7 +259,6 @@ def calculate_metrics(
     outputs: List[RequestFuncOutput],
     dur_s: float,
     tokenizer: PreTrainedTokenizerBase,
-    selected_percentile_metrics: List[str],
     selected_percentiles: List[float],
 ) -> Tuple[BenchmarkMetrics, List[int]]:
     actual_output_lens: List[int] = []
@@ -266,6 +269,8 @@ def calculate_metrics(
     tpots: List[float] = []
     ttfts: List[float] = []
     e2els: List[float] = []
+    request_duration:List[float] = []
+    reqs_output_throughputs: List[float] = []
     for i in range(len(outputs)):
         if outputs[i].success:
             # We use the tokenizer to count the number of output tokens for all
@@ -282,7 +287,9 @@ def calculate_metrics(
             itls += outputs[i].itl
             ttfts.append(outputs[i].ttft)
             e2els.append(outputs[i].latency)
+            request_duration.append(outputs[i].latency)
             total_request_throughput += output_len / outputs[i].latency
+            reqs_output_throughputs.append(outputs[i].req_output_throughput)
             completed += 1
 
         else:
@@ -294,6 +301,7 @@ def calculate_metrics(
             "on the benchmark arguments.",
             stacklevel=2,
         )
+        
     metrics = BenchmarkMetrics(
         completed=completed,
         total_input=total_input,
@@ -302,6 +310,12 @@ def calculate_metrics(
         output_throughput=sum(actual_output_lens) / dur_s,
         total_token_throughput=(total_input + sum(actual_output_lens)) / dur_s,
         mean_request_throughput=total_request_throughput / completed,
+        mean_otpr_ts = np.mean(reqs_output_throughputs or 0),
+        std_otpr_ts = np.std(reqs_output_throughputs or 0),
+        median_otpr_ts = np.median(reqs_output_throughputs,0),
+        percentiles_otpr_ts=[
+            (p, np.percentile(reqs_output_throughputs or 0, p)) for p in selected_percentiles
+        ],
         mean_ttft_ms=np.mean(ttfts or 0)
         * 1000,  # ttfts is empty if streaming is not supported by backend
         std_ttft_ms=np.std(ttfts or 0) * 1000,
@@ -328,7 +342,6 @@ def calculate_metrics(
             (p, np.percentile(e2els or 0, p) * 1000) for p in selected_percentiles
         ],
     )
-
     return metrics, actual_output_lens
 
 
@@ -344,7 +357,6 @@ async def benchmark(
     request_rate: float,
     disable_tqdm: bool,
     profile: bool,
-    selected_percentile_metrics: List[str],
     selected_percentiles: List[str],
 ):
     if backend in ASYNC_REQUEST_FUNCS:
@@ -363,6 +375,7 @@ async def benchmark(
         best_of=best_of,
         use_beam_search=use_beam_search,
     )
+    print(test_input)
     test_output = await request_func(request_func_input=test_input)
     if not test_output.success:
         raise ValueError(
@@ -436,13 +449,12 @@ async def benchmark(
         outputs=outputs,
         dur_s=benchmark_duration,
         tokenizer=tokenizer,
-        selected_percentile_metrics=selected_percentile_metrics,
         selected_percentiles=selected_percentiles,
     )
 
     print("{s:{c}^{n}}".format(s=" Serving Benchmark Result ", n=50, c="="))
     print("{:<40} {:<10}".format("Successful requests:", metrics.completed))
-    print("{:<40} {:<10.2f}".format("Benchmark duration (s):", benchmark_duration))
+    print("{:<40} {:<10.2f}".format("Benchmark duration (s):", benchmark_duration))    
     print("{:<40} {:<10}".format("Total input tokens:", metrics.total_input))
     print("{:<40} {:<10}".format("Total generated tokens:", metrics.total_output))
     print(
@@ -468,9 +480,11 @@ async def benchmark(
         "total_output_tokens": metrics.total_output,
         "request_throughput": metrics.request_throughput,
         "output_throughput": metrics.output_throughput,
+        "otpr":[output.req_output_throughput for output in outputs],
         "total_token_throughput": metrics.total_token_throughput,
         "input_lens": [output.prompt_len for output in outputs],
         "output_lens": actual_output_lens,
+        "e2els":[ output.latency for output in outputs],
         "ttfts": [output.ttft for output in outputs],
         "itls": [output.itl for output in outputs],
         "generated_texts": [output.generated_text for output in outputs],
@@ -487,39 +501,67 @@ async def benchmark(
     ):
         # This function print and add statistics of the specified
         # metric.
-        if metric_attribute_name not in selected_percentile_metrics:
-            return
-        print("{s:{c}^{n}}".format(s=metric_header, n=50, c="-"))
-        print(
-            "{:<40} {:<10.2f}".format(
-                f"Mean {metric_name} (ms):",
-                getattr(metrics, f"mean_{metric_attribute_name}_ms"),
+        if metric_attribute_name == "otpr":
+            print("{s:{c}^{n}}".format(s=metric_header, n=50, c="-"))
+            print(
+                "{:<40} {:<10.2f}".format(
+                    f"Mean {metric_name} (t/s):",
+                    getattr(metrics, f"mean_{metric_attribute_name}_ts"),
+                )
             )
-        )
-        print(
-            "{:<40} {:<10.2f}".format(
-                f"Median {metric_name} (ms):",
-                getattr(metrics, f"median_{metric_attribute_name}_ms"),
+            print(
+                "{:<40} {:<10.2f}".format(
+                    f"Median {metric_name} (t/s):",
+                    getattr(metrics, f"median_{metric_attribute_name}_ts"),
+                )
             )
-        )
-        result[f"mean_{metric_attribute_name}_ms"] = getattr(
-            metrics, f"mean_{metric_attribute_name}_ms"
-        )
-        result[f"median_{metric_attribute_name}_ms"] = getattr(
-            metrics, f"median_{metric_attribute_name}_ms"
-        )
-        result[f"std_{metric_attribute_name}_ms"] = getattr(
-            metrics, f"std_{metric_attribute_name}_ms"
-        )
-        for p, value in getattr(metrics, f"percentiles_{metric_attribute_name}_ms"):
-            p_word = str(int(p)) if int(p) == p else str(p)
-            print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name} (ms):", value))
-            result[f"p{p_word}_{metric_attribute_name}_ms"] = value
+            result[f"mean_{metric_attribute_name}_t/s"] = getattr(
+                metrics, f"mean_{metric_attribute_name}_ts"
+            )
+            result[f"median_{metric_attribute_name}_t/s"] = getattr(
+                metrics, f"median_{metric_attribute_name}_ts"
+            )
+            result[f"std_{metric_attribute_name}_t/s"] = getattr(
+                metrics, f"std_{metric_attribute_name}_ts"
+            )
+            for p, value in getattr(metrics, f"percentiles_{metric_attribute_name}_ts"):
+                p_word = str(int(p)) if int(p) == p else str(p)
+                print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name} (t/s):", value))
+                result[f"p{p_word}_{metric_attribute_name}_ts"] = value
+                
+        else:
+            print("{s:{c}^{n}}".format(s=metric_header, n=50, c="-"))
+            print(
+                "{:<40} {:<10.2f}".format(
+                    f"Mean {metric_name} (ms):",
+                    getattr(metrics, f"mean_{metric_attribute_name}_ms"),
+                )
+            )
+            print(
+                "{:<40} {:<10.2f}".format(
+                    f"Median {metric_name} (ms):",
+                    getattr(metrics, f"median_{metric_attribute_name}_ms"),
+                )
+            )
+            result[f"mean_{metric_attribute_name}_ms"] = getattr(
+                metrics, f"mean_{metric_attribute_name}_ms"
+            )
+            result[f"median_{metric_attribute_name}_ms"] = getattr(
+                metrics, f"median_{metric_attribute_name}_ms"
+            )
+            result[f"std_{metric_attribute_name}_ms"] = getattr(
+                metrics, f"std_{metric_attribute_name}_ms"
+            )
+            for p, value in getattr(metrics, f"percentiles_{metric_attribute_name}_ms"):
+                p_word = str(int(p)) if int(p) == p else str(p)
+                print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name} (ms):", value))
+                result[f"p{p_word}_{metric_attribute_name}_ms"] = value
 
     process_one_metric("ttft", "TTFT", "Time to First Token")
     process_one_metric("tpot", "TPOT", "Time per Output Token (excl. 1st token)")
     process_one_metric("itl", "ITL", "Inter-token Latency")
     process_one_metric("e2el", "E2EL", "End-to-end Latency")
+    process_one_metric("otpr","OTPR","Output Throughput per user")
 
     print("=" * 50)
 
@@ -622,7 +664,6 @@ def main(args: argparse.Namespace):
             request_rate=args.request_rate,
             disable_tqdm=args.disable_tqdm,
             profile=args.profile,
-            selected_percentile_metrics=args.percentile_metrics.split(","),
             selected_percentiles=[float(p) for p in args.metric_percentiles.split(",")],
         )
     )
@@ -837,15 +878,15 @@ def get_args():
         "{backend}-{args.request_rate}qps-{base_model_id}-{current_dt}.json"
         " format.",
     )
-    parser.add_argument(
-        "--percentile-metrics",
-        type=str,
-        default="ttft,tpot,itl",
-        help="Comma-seperated list of selected metrics to report percentils. "
-        "This argument specifies the metrics to report percentiles. "
-        'Allowed metric names are "ttft", "tpot", "itl", "e2el". '
-        'Default value is "ttft,tpot,itl".',
-    )
+    # parser.add_argument(
+    #     "--percentile-metrics",
+    #     type=str,
+    #     default="ttft,tpot,itl,e2el",
+    #     help="Comma-seperated list of selected metrics to report percentils. "
+    #     "This argument specifies the metrics to report percentiles. "
+    #     'Allowed metric names are "ttft", "tpot", "itl", "e2el(End to End Latency)".,"otpr(Output Throughput per request) '
+    #     'Default value is "ttft,tpot,itl".',
+    # )
     parser.add_argument(
         "--metric-percentiles",
         type=str,
@@ -871,7 +912,7 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url):
             self.seed = 42
             self.disable_tqdm = False
             self.backend = "vllm"
-            self.percentile_metrics = "ttft,tpot,itl"
+            self.percentile_metrics = "ttft,tpot,itl,e2el"
             self.metric_percentiles = "95"
             self.base_url = base_url
             self.endpoint = "/completions"
