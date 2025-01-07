@@ -37,7 +37,6 @@ class OpenAIChatCompletionsClient(LLMClient):
             "model": model,
             "messages": message,
             "stream": True,
-            "ignore_eos":True
         }
         sampling_params = request_config.sampling_params
         body.update(sampling_params or {})
