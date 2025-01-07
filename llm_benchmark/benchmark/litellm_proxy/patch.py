@@ -37,6 +37,8 @@ class OpenAIChatCompletionsClient(LLMClient):
             "model": model,
             "messages": message,
             "stream": True,
+            # REMOVED: because this is not supported by litellm proxy
+            # "ignore_eos":True
         }
         sampling_params = request_config.sampling_params
         body.update(sampling_params or {})
