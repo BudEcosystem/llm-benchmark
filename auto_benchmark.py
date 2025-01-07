@@ -210,7 +210,7 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
     try:
         latency_factors = None
         if args.engine == "litellm_proxy":
-            latency_factors = {"T_base": 0.5, "T_input": 0.5, "T_output": 0.5}
+            latency_factors = {"T_base": 0.5, "T_input": 0.005, "T_output": 0.005}
         warmup_benchmark(model, base_url, args.benchmark_script, env_values=engine_config["envs"] if engine_config else None, latency_factors=latency_factors)
     except Exception as e:
         print(f"Error during {engine_config_id} warm up: {e}")
@@ -333,8 +333,8 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             "benchmark_failed"
         )
     finally:
-        if container_id:
-            single_node_controller.remove_container(container_id)
+        # if container_id:
+        #     single_node_controller.remove_container(container_id)
         if log_metrics_task is not None and stop_event is not None:
             stop_event.set()
             log_metrics_task.join()
