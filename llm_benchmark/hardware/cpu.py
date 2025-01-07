@@ -276,12 +276,12 @@ def get_temp_and_power_info(current_only: bool = False):
 
 
 def get_cpu_info():
-    cpu_info = subprocess.check_output(["lscpu"], text=True)
-    if "Intel" in cpu_info:
-        print("CPU is Intel")
-    else:
-        print("CPU is not Intel")
-        return {}
+    # cpu_info = subprocess.check_output(["lscpu"], text=True)
+    # if "Intel" in cpu_info:
+    #     print("CPU is Intel")
+    # else:
+    #     print("CPU is not Intel")
+    #     return {}
     
     info = get_cores_and_mem_info()
     info.update(get_temp_and_power_info())
@@ -316,6 +316,6 @@ def create_cpu_config():
     device_config["peak_i8_TFLOPS"] = 250
     device_config["peak_i4_TFLOPS"] = 500
     device_config["inter_node_bandwidth_in_GB_per_sec"] = 200
-    device_config["available_count"] = dev_info["num_virtual_cores"]
+    device_config["available_count"] = dev_info["numa_count"]
     
     return device_config, dev_info

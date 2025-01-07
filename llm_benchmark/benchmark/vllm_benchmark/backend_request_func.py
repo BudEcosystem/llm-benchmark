@@ -36,6 +36,7 @@ class RequestFuncOutput:
         default_factory=list)  # List of inter-token latencies
     prompt_len: int = 0
     error: str = ""
+    req_output_throughput : float = 0.0
 
 
 async def async_request_tgi(
@@ -64,6 +65,7 @@ async def async_request_tgi(
         ttft = 0.0
         st = time.perf_counter()
         most_recent_timestamp = st
+        token_count = 0
         try:
             async with session.post(url=api_url, json=payload) as response:
                 if response.status == 200:
@@ -81,6 +83,7 @@ async def async_request_tgi(
 
                         data = json.loads(chunk)
                         timestamp = time.perf_counter()
+                        token_count +=1
                         # First token
                         if ttft == 0.0:
                             ttft = time.perf_counter() - st
@@ -92,10 +95,13 @@ async def async_request_tgi(
                                               most_recent_timestamp)
 
                         most_recent_timestamp = timestamp
-
-                    output.latency = most_recent_timestamp - st
+                    
+                    latency = most_recent_timestamp - st
+                    output.latency = latency
                     output.success = True
                     output.generated_text = data["generated_text"]
+                    output.req_output_throughput = token_count/latency
+                     
                 else:
                     output.error = response.reason or ""
                     output.success = False
@@ -133,6 +139,7 @@ async def async_request_trt_llm(
         ttft = 0.0
         st = time.perf_counter()
         most_recent_timestamp = st
+        token_count = 0
         try:
             async with session.post(url=api_url, json=payload) as response:
                 if response.status == 200:
@@ -147,6 +154,7 @@ async def async_request_trt_llm(
                         data = json.loads(chunk)
                         output.generated_text += data["text_output"]
                         timestamp = time.perf_counter()
+                        token_count+=1
                         # First token
                         if ttft == 0.0:
                             ttft = time.perf_counter() - st
@@ -159,8 +167,10 @@ async def async_request_trt_llm(
 
                         most_recent_timestamp = timestamp
 
-                    output.latency = most_recent_timestamp - st
+                    latency = most_recent_timestamp - st
+                    output.latency = latency
                     output.success = True
+                    output.req_output_throughput = token_count/latency
 
                 else:
                     output.error = response.reason or ""
@@ -245,6 +255,7 @@ async def async_request_openai_completions(
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
 
+        token_count = 0
         generated_text = ""
         ttft = 0.0
         st = time.perf_counter()
@@ -282,10 +293,12 @@ async def async_request_openai_completions(
 
                                 most_recent_timestamp = timestamp
                                 generated_text += data["choices"][0]["text"]
-
+                                token_count += 1
+                                
                     output.generated_text = generated_text
                     output.success = True
                     output.latency = latency
+                    output.req_output_throughput = token_count/latency
                 else:
                     output.error = response.reason or ""
                     output.success = False
@@ -299,17 +312,101 @@ async def async_request_openai_completions(
     return output
 
 
-async def async_request_openai_chat_completions(
+# async def async_request_openai_chat_completions(
+#     request_func_input: RequestFuncInput,
+#     pbar: Optional[tqdm] = None,
+# ) -> RequestFuncOutput:
+#     api_url = request_func_input.api_url
+#     assert api_url.endswith(
+#         "chat/completions"
+#     ), "OpenAI Chat Completions API URL must end with 'chat/completions'."
+
+#     async with aiohttp.ClientSession(timeout=AIOHTTP_TIMEOUT) as session:
+#         assert not request_func_input.use_beam_search
+#         payload = {
+#             "model": request_func_input.model,
+#             "messages": [
+#                 {
+#                     "role": "user",
+#                     "content": request_func_input.prompt,
+#                 },
+#             ],
+#             "temperature": 0.0,
+#             "max_tokens": request_func_input.output_len,
+#             "stream": True,
+#         }
+#         headers = {
+#             "Content-Type": "application/json",
+#             "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}",
+#         }
+
+#         output = RequestFuncOutput()
+#         output.prompt_len = request_func_input.prompt_len
+
+#         generated_text = ""
+#         ttft = 0.0
+#         st = time.perf_counter()
+#         most_recent_timestamp = st
+#         try:
+#             async with session.post(url=api_url, json=payload,
+#                                     headers=headers) as response:
+#                 if response.status == 200:
+#                     async for chunk_bytes in response.content:
+#                         chunk_bytes = chunk_bytes.strip()
+#                         if not chunk_bytes:
+#                             continue
+
+#                         chunk = remove_prefix(chunk_bytes.decode("utf-8"),
+#                                               "data: ")
+#                         if chunk == "[DONE]":
+#                             latency = time.perf_counter() - st
+#                         else:
+#                             timestamp = time.perf_counter()
+#                             data = json.loads(chunk)
+
+#                             delta = data["choices"][0]["delta"]
+#                             if delta.get("content", None):
+#                                 # First token
+#                                 if ttft == 0.0:
+#                                     ttft = time.perf_counter() - st
+#                                     output.ttft = ttft
+
+#                                 # Decoding phase
+#                                 else:
+#                                     output.itl.append(timestamp -
+#                                                       most_recent_timestamp)
+
+#                                 generated_text += delta["content"]
+
+#                             most_recent_timestamp = timestamp
+
+#                     output.generated_text = generated_text
+#                     output.success = True
+#                     output.latency = latency
+#                 else:
+#                     output.error = response.reason or ""
+#                     output.success = False
+#         except Exception:
+#             output.success = False
+#             exc_info = sys.exc_info()
+#             output.error = "".join(traceback.format_exception(*exc_info))
+
+#     if pbar:
+#         pbar.update(1)
+#     return output
+
+async def async_request_api_chat_completions(
     request_func_input: RequestFuncInput,
     pbar: Optional[tqdm] = None,
 ) -> RequestFuncOutput:
     api_url = request_func_input.api_url
     assert api_url.endswith(
         "chat/completions"
-    ), "OpenAI Chat Completions API URL must end with 'chat/completions'."
+    ), "Chat Completions API URL must end with 'chat/completions'."
 
     async with aiohttp.ClientSession(timeout=AIOHTTP_TIMEOUT) as session:
         assert not request_func_input.use_beam_search
+        
         payload = {
             "model": request_func_input.model,
             "messages": [
@@ -322,10 +419,17 @@ async def async_request_openai_chat_completions(
             "max_tokens": request_func_input.output_len,
             "stream": True,
         }
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}",
-        }
+        headers = {"Content-Type": "application/json"}
+        budserve_api_key = os.environ.get('BUDSERVE_API_KEY')
+        openai_api_key = os.environ.get('OPENAI_API_KEY')
+
+        # if budserve_api_key!="" and openai_api_key!="":
+        #     print("Warning: Both BUDSERVE_API_KEY and OPENAI_API_KEY are set. Using BUDSERVE_API_KEY.")
+        
+        if budserve_api_key:
+            headers["Authorization"] = f"Bearer {budserve_api_key}"
+        elif openai_api_key:
+            headers["Authorization"] = f"Bearer {openai_api_key}"
 
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
@@ -334,9 +438,11 @@ async def async_request_openai_chat_completions(
         ttft = 0.0
         st = time.perf_counter()
         most_recent_timestamp = st
+        token_count = 0
         try:
             async with session.post(url=api_url, json=payload,
                                     headers=headers) as response:
+                request_duration = time.perf_counter() - st
                 if response.status == 200:
                     async for chunk_bytes in response.content:
                         chunk_bytes = chunk_bytes.strip()
@@ -364,12 +470,16 @@ async def async_request_openai_chat_completions(
                                                       most_recent_timestamp)
 
                                 generated_text += delta["content"]
+                                token_count +=1
 
                             most_recent_timestamp = timestamp
-
+                    
+                    total_request_time = time.perf_counter() - st        
                     output.generated_text = generated_text
                     output.success = True
-                    output.latency = latency
+                    output.latency = total_request_time
+                    
+                    output.req_output_throughput = token_count/latency
                 else:
                     output.error = response.reason or ""
                     output.success = False
@@ -421,7 +531,7 @@ ASYNC_REQUEST_FUNCS = {
     "lmdeploy": async_request_openai_completions,
     "deepspeed-mii": async_request_deepspeed_mii,
     "openai": async_request_openai_completions,
-    "openai-chat": async_request_openai_chat_completions,
+    "openai-chat": async_request_api_chat_completions,
     "tensorrt-llm": async_request_trt_llm,
     "scalellm": async_request_openai_completions,
 }
