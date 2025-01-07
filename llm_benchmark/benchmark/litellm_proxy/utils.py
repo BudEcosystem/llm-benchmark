@@ -148,7 +148,7 @@ def flatten_dict(d, parent_key="", sep="_"):
     return dict(items)
 
 
-def compute_latency_factors(model: str, request_metadata: Dict[str, Any]) -> Dict[str, float]:
+def compute_latency_factors(model: str, request_metadata: Dict[str, Any], llm_api: str = "litellm_proxy") -> Dict[str, float]:
     """Compute the latency factors for a model."""
     from llm_benchmark.benchmark.litellm_proxy.token_benchmark_ray import (
         run_token_benchmark as litellm_run_benchmark,
@@ -164,7 +164,7 @@ def compute_latency_factors(model: str, request_metadata: Dict[str, Any]) -> Dic
     T_total = []
     for _ in range(num_completed_requests):
         result_output = litellm_run_benchmark(
-            model, 1, 1, mean_input_token, stddev_input_token, mean_output_token, stddev_output_token, request_metadata=request_metadata
+            model, 1, 1, mean_input_token, stddev_input_token, mean_output_token, stddev_output_token, llm_api=llm_api, request_metadata=request_metadata
         )
         result_output = format_llmperf_result(result_output)
         N_input.append(result_output["input_tokens"])

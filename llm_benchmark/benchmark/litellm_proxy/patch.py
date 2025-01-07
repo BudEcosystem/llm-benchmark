@@ -24,6 +24,7 @@ class OpenAIChatCompletionsClient(LLMClient):
     """Client for OpenAI Chat Completions API."""
 
     def llm_request(self, request_config: RequestConfig) -> Dict[str, Any]:
+        request_metadata = request_config.metadata if hasattr(request_config, 'metadata') else {}
         prompt = request_config.prompt
         prompt, prompt_len = prompt
 
@@ -56,10 +57,10 @@ class OpenAIChatCompletionsClient(LLMClient):
 
         start_time = time.monotonic()
         most_recent_received_token_time = time.monotonic()
-        address = os.environ.get("OPENAI_API_BASE")
+        address = os.environ.get("OPENAI_API_BASE") or request_metadata.get("api_base")
         if not address:
             raise ValueError("the environment variable OPENAI_API_BASE must be set.")
-        key = os.environ.get("OPENAI_API_KEY")
+        key = os.environ.get("OPENAI_API_KEY") or request_metadata.get("api_key")
         if not key:
             raise ValueError("the environment variable OPENAI_API_KEY must be set.")
         headers = {"Authorization": f"Bearer {key}"}
