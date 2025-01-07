@@ -157,20 +157,23 @@ class MockLiteLLMChatCompletionsClient(LLMClient):
 
         model = request_config.model
         body = {
-            "model": "openai-test-model",
+            # TODO: uncomment this if running benchmark on local with mock litellm proxy server
+            # "model": "openai-test-model",
+            "model": model,
             "messages": message,
             "stream": True,
             "mock_response": "This is a mock response for chat completions.",
             "mock_delay": request_config.metadata.get("mock_delay"),
-            "user_config": {
-                "model_list": [{
-                    "model_name": "openai-test-model",
-                    "litellm_params": {
-                        "model": model,
-                        "api_key": api_key,
-                    }
-                }]
-            }
+            # TODO: uncomment this if running benchmark on local with mock litellm proxy server
+            # "user_config": {
+            #     "model_list": [{
+            #         "model_name": "openai-test-model",
+            #         "litellm_params": {
+            #             "model": model,
+            #             "api_key": api_key,
+            #         }
+            #     }]
+            # }
         }
         sampling_params = request_config.sampling_params
         body.update(sampling_params or {})
@@ -284,18 +287,18 @@ class LiteLLMChatCompletionsClient(LLMClient):
 
         model = request_config.model
         body = {
-            "model": "test-model",
+            "model": model,
             "messages": message,
             "stream": True,
-            "user_config": {
-                "model_list": [{
-                    "model_name": "test-model",
-                    "litellm_params": {
-                        "model": model,
-                        "api_key": api_key,
-                    }
-                }]
-            }
+            # "user_config": {
+            #     "model_list": [{
+            #         "model_name": "test-model",
+            #         "litellm_params": {
+            #             "model": model,
+            #             "api_key": api_key,
+            #         }
+            #     }]
+            # }
         }
         sampling_params = request_config.sampling_params
         body.update(sampling_params or {})
