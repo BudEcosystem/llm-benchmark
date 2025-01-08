@@ -167,8 +167,8 @@ def compute_latency_factors(model: str, request_metadata: Dict[str, Any], llm_ap
             model, 1, 1, mean_input_token, stddev_input_token, mean_output_token, stddev_output_token, llm_api=llm_api, request_metadata=request_metadata
         )
         result_output = format_llmperf_result(result_output)
-        if result_output["error_messages"]:
-            raise Exception(f"Error messages: {result_output['error_messages']}")
+        if result_output["error_messages"] and result_output["completed"] == 0:
+            raise Exception(f"Error messages: {', '.join(result_output['error_messages'])}")
         N_input.append(result_output["input_tokens"])
         N_output.append(result_output["output_tokens"])
         T_total.append(float(result_output["duration"]))

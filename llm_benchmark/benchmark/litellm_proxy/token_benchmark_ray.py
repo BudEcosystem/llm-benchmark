@@ -256,8 +256,10 @@ def metrics_summary(
     ret[common_metrics.NUM_REQ_STARTED] = len(metrics)
 
     error_codes = df[common_metrics.ERROR_CODE].dropna()
-    error_messages = df[common_metrics.ERROR_MSG].dropna().to_list()
     num_errors = len(error_codes)
+    error_messages = []
+    if num_errors > 0:
+        error_messages = df[common_metrics.ERROR_MSG].dropna().to_list()
     ret[common_metrics.ERROR_RATE] = num_errors / len(metrics) if len(metrics) else 0
     ret[common_metrics.NUM_ERRORS] = num_errors
     print(f"Number Of Errored Requests: {num_errors}")
