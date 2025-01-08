@@ -2,6 +2,7 @@ import os
 import time
 import requests
 import subprocess
+from typing import Optional
 
 
 def build_docker_run_command(
@@ -64,8 +65,9 @@ def build_docker_run_command(
 
 
 def deploy_model(
+    engine: str,
     docker_image: str,
-    env_values: str,
+    env_values: dict,
     result_dir: str,
     extra_args: list,
     engine_config_id: str,
@@ -75,6 +77,8 @@ def deploy_model(
     profile_model: bool = False,
 ) -> str:
     try:
+        if engine == "litellm_proxy":
+            extra_args.pop('model')
         docker_command = build_docker_run_command(
             docker_image,
             env_values,
@@ -107,7 +111,7 @@ def deploy_model(
         # Wait for the container to initialize
         time.sleep(warmup_sec)
 
-        if not verify_server_status(container_id, f"http://localhost:{port}/v1"):
+        if not verify_server_status(engine, container_id, f"http://localhost:{port}/v1", env_values=env_values):
             raise RuntimeError("Server failed to start after maximum retries.")
 
         print(f"Container {container_id} is now running.")
@@ -128,6 +132,7 @@ def remove_container(container_id: str):
         print(f"Failed to remove container {container_id}. Docker error: {e.stderr}")
         raise
 
+
 def verify_container_status(container_id: str):
     try:
         result = subprocess.run(
@@ -146,11 +151,20 @@ def verify_container_status(container_id: str):
         print(f"Failed to check status of container {container_id}. Docker error: {e.stderr}")
         raise
 
+
 def verify_server_status(
-    container_id: str, base_url: str, max_retries: int = 100, retry_interval: int = 60
+    engine: str, container_id: str, base_url: str, max_retries: int = 100, retry_interval: int = 60, env_values: Optional[dict] = None
 ) -> bool:
     """Verifies if the server is up and running by checking the API status."""
     url = f"{base_url}/models"
+    headers = None
+    
+    if engine == "litellm_proxy":
+        if base_url.endswith("/v1"):
+            base_url = base_url[:-3]
+        url = f"{base_url}/health/readiness"
+        litellm_master_key = env_values.get("LITELLM_MASTER_KEY")
+        headers = {"Authorization": f"Bearer {litellm_master_key}"}
 
     for attempt in range(max_retries):
         try:
@@ -161,7 +175,7 @@ def verify_server_status(
             print(f"Error verifying container status: {e}")
             return False
         try:
-            response = requests.get(url)
+            response = requests.get(url, headers=headers)
 
             if response.status_code == 200:
                 print("Server is up and running.")
