@@ -136,7 +136,10 @@ def get_token_throughput_latencies(
                     request_metrics[common_metrics.INTER_TOKEN_LAT] = 0
                 request_metrics[common_metrics.NUM_OUTPUT_TOKENS] = num_output_tokens
                 request_metrics[common_metrics.NUM_TOTAL_TOKENS] = request_metrics[common_metrics.NUM_INPUT_TOKENS] + num_output_tokens
-                request_metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = num_output_tokens / request_metrics[common_metrics.E2E_LAT]
+                if request_metrics[common_metrics.E2E_LAT] > 0:
+                    request_metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = num_output_tokens / request_metrics[common_metrics.E2E_LAT]
+                else:
+                    request_metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = 0
                 all_metrics.append(request_metrics)
             completed_requests.extend(all_metrics)
         pbar.update(len(completed_requests) - num_completed_requests)
@@ -159,7 +162,10 @@ def get_token_throughput_latencies(
             request_metrics[common_metrics.INTER_TOKEN_LAT] = 0
         request_metrics[common_metrics.NUM_OUTPUT_TOKENS] = num_output_tokens
         request_metrics[common_metrics.NUM_TOTAL_TOKENS] = request_metrics[common_metrics.NUM_INPUT_TOKENS] + num_output_tokens
-        request_metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = num_output_tokens / request_metrics[common_metrics.E2E_LAT]
+        if request_metrics[common_metrics.E2E_LAT] > 0:
+            request_metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = num_output_tokens / request_metrics[common_metrics.E2E_LAT]
+        else:
+            request_metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = 0
                 
         all_metrics.append(request_metrics)
     completed_requests.extend(all_metrics)
@@ -198,6 +204,7 @@ def metrics_summary(
             - Number of completed requests
             - Error rate
             - Error code frequency
+            - Error messages
             - Quantiles (p25-p99) for the following metrics:
                 - Inter token latency
                 - Time to first token
@@ -249,6 +256,7 @@ def metrics_summary(
     ret[common_metrics.NUM_REQ_STARTED] = len(metrics)
 
     error_codes = df[common_metrics.ERROR_CODE].dropna()
+    error_messages = df[common_metrics.ERROR_MSG].dropna().to_list()
     num_errors = len(error_codes)
     ret[common_metrics.ERROR_RATE] = num_errors / len(metrics) if len(metrics) else 0
     ret[common_metrics.NUM_ERRORS] = num_errors
@@ -276,6 +284,7 @@ def metrics_summary(
 
     ret[common_metrics.NUM_COMPLETED_REQUESTS] = num_completed_requests
     ret[common_metrics.COMPLETED_REQUESTS_PER_MIN] = num_completed_requests_per_min
+    ret[common_metrics.ERROR_MSG] = error_messages  # list of error messages
     
     return ret
 

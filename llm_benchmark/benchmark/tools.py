@@ -155,6 +155,7 @@ def format_llmperf_result(result):
     formatted_result["p95_itl_ms"] = (
         result["results"]["inter_token_latency_s"]["quantiles"]["p95"] * 1000
     )
+    formatted_result["error_messages"] = result["results"].get("error_msg", [])
     return formatted_result
 
 
