@@ -112,6 +112,7 @@ def format_vllm_result(result):
     formatted_result["total_token_throughput"] = result["total_token_throughput"]
     formatted_result["output_throughput_per_user"] = result["mean_output_throughput_per_user"]
     formatted_result["mean_end_to_end_latency"] = result["mean_e2el_ms"]
+    formatted_result["duration"] = result["duration"]
     formatted_result["mean_ttft_ms"] = result["mean_ttft_ms"]
     formatted_result["p95_ttft_ms"] = result["p95_ttft_ms"]
     formatted_result["mean_tpot_ms"] = result["mean_tpot_ms"]
