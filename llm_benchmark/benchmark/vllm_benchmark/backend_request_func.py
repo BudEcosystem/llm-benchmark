@@ -275,7 +275,7 @@ async def async_request_openai_completions(
                             latency = time.perf_counter() - st
                         else:
                             data = json.loads(chunk)
-
+                            print(data)
                             # NOTE: Some completion API might have a last
                             # usage summary response without a token so we
                             # want to check a token was generated
