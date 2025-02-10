@@ -1,13 +1,16 @@
 import os
 import csv
 import shutil
-import datetime
+from typing import Optional
 
 from llm_benchmark.benchmark.vllm_benchmark.benchmark_serving import (
     run_benchmark as vllm_run_benchmark,
 )
 from llm_benchmark.benchmark.llmperf.token_benchmark_ray import (
     run_token_benchmark as llmperf_run_benchmark,
+)
+from llm_benchmark.benchmark.litellm_proxy.token_benchmark_ray import (
+    run_token_benchmark as litellm_run_benchmark,
 )
 from llm_benchmark.profiler.constants import VllmProfileLayer
 from llm_benchmark.profiler.record_function_tracer import RecordFunctionTracer
@@ -154,6 +157,7 @@ def format_llmperf_result(result):
     formatted_result["p95_itl_ms"] = (
         result["results"]["inter_token_latency_s"]["quantiles"]["p95"] * 1000
     )
+    formatted_result["error_messages"] = result["results"].get("error_msg", [])
     return formatted_result
 
 
@@ -167,10 +171,15 @@ def run_benchmark(
     result_dir: str = None,
     run_id: str = None,
     profiler_result: bool = False,
+    env_values: Optional[dict] = None,
+    latency_factors: Optional[dict] = None,
 ):
     # Set environment variables directly
-    os.environ["OPENAI_API_KEY"] = "secret_abcdefg"
-    os.environ["OPENAI_API_BASE"] = base_url
+    # TODO: Removed it because litellm_proxy requires actual api key
+    # and this was overriding the one in the envs
+    # If required to set for other engines, can be set as env
+    # os.environ["OPENAI_API_KEY"] = "secret_abcdefg"
+    # os.environ["OPENAI_API_BASE"] = base_url
 
     if result_dir is not None:
         result_dir = os.path.join(result_dir, model.replace("/", "--"))
@@ -198,9 +207,22 @@ def run_benchmark(
             model, input_token, output_token, concurrency, base_url
         )
         result_output = format_vllm_result(result_output)
-    else:
+    elif benchmark_script == "llmperf":
         result_output = llmperf_run_benchmark(
             model, concurrency, concurrency, input_token, 0, output_token, 0
+        )
+        result_output = format_llmperf_result(result_output)
+    elif benchmark_script == "litellm_proxy":
+        litellm_master_key = env_values.get("LITELLM_MASTER_KEY")
+        if litellm_master_key is None:
+            raise ValueError("LITELLM_MASTER_KEY is not set in engine config")
+        request_metadata = {
+            "api_key": "fake-api-key",
+            "litellm_proxy_url": base_url,
+            "litellm_master_key": litellm_master_key
+        }
+        result_output = litellm_run_benchmark(
+            model, concurrency, concurrency, input_token, 0, output_token, 0, llm_api="mock_litellm_proxy", request_metadata=request_metadata, latency_factors=latency_factors
         )
         result_output = format_llmperf_result(result_output)
 
