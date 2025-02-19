@@ -208,6 +208,7 @@ def run_benchmark(
         )
         result_output = format_vllm_result(result_output)
     elif benchmark_script == "llmperf":
+        os.environ["OPENAI_API_BASE"] = base_url
         result_output = llmperf_run_benchmark(
             model, concurrency, concurrency, input_token, 0, output_token, 0
         )

@@ -8,6 +8,7 @@ from .cpu import create_cpu_config, get_cpu_info
 from .cuda import create_cuda_config
 from .hpu import get_hpu_info
 from .hpu import create_hpu_config
+from .rocm import create_rocm_config
 
 from llm_benchmark.utils.device_utils import get_available_devices
 
@@ -85,6 +86,8 @@ def create_device_config(device="cpu"):
         return create_cuda_config()
     elif device == "hpu":
         return create_hpu_config()
+    elif device == "rocm":
+        return create_rocm_config()
     else:
         return create_cpu_config()
         # raise ValueError(f"Invalid device: {device}")

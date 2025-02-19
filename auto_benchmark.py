@@ -182,6 +182,8 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
         "extra_args": engine_config["args"] if engine_config else [],
         "device": args.device,
         "profile_model": args.profile_model,
+        "use_podman": args.use_podman,
+        "image_start_command": args.image_start_command
     }
     engine_config_hash = hashlib.sha1(
         json.dumps(engine_kwargs, sort_keys=True).encode()
@@ -231,10 +233,10 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
     except Exception as e:
         print(f"Error during {engine_config_id} warm up: {e}")
         if container_id:
-            single_node_controller.remove_container(container_id)
+            single_node_controller.remove_container(container_id, args.use_podman)
         checkpoint[engine_config_hash]["status"] = "warmup_failed"
         if container_id:
-            single_node_controller.remove_container(container_id)
+            single_node_controller.remove_container(container_id, args.use_podman)
 
         return checkpoint
 
@@ -285,7 +287,7 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
                     "output_dir": os.path.join(
                         os.environ["PROFILER_RESULT_DIR"], model.replace("/", "--")
                     ),
-                    "pid": single_node_controller.get_container_pid(container_id)
+                    "pid": single_node_controller.get_container_pid(container_id, args.use_podman)
                     if container_id is not None
                     else None,
                     "interval": 3,
@@ -352,7 +354,7 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
         )
     finally:
         # if container_id:
-        #     single_node_controller.remove_container(container_id)
+        #     single_node_controller.remove_container(container_id, args.use_podman)
         if log_metrics_task is not None and stop_event is not None:
             stop_event.set()
             log_metrics_task.join()
@@ -461,7 +463,7 @@ if __name__ == "__main__":
         "--device",
         type=str,
         default="gpu",
-        choices=["gpu", "cpu", "hpu"],
+        choices=["gpu", "cpu", "hpu", "rocm"],
         help="Whether to profile on gpu or cpu.",
     )
     args.add_argument(
@@ -490,6 +492,16 @@ if __name__ == "__main__":
         default=None,
         help="Checkpoint file path to resume from, if not set and  resume=True, fallbacks to the latest",
     )
+    args.add_argument(
+        "--use-podman",
+        action="store_true",
+        help="Whether to use podman instead of docker.",
+    )
+    args.add_argument(
+        "--image-start-command",
+        type=str,
+        default='',
+        help="The command used to start the image.",
+    )
     args = args.parse_args()
-
     main(args)
