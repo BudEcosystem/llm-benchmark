@@ -58,11 +58,10 @@ class OpenAIChatCompletionsClient(LLMClient):
 
         start_time = time.monotonic()
         most_recent_received_token_time = time.monotonic()
-        address = os.environ.get("OPENAI_API_BASE") or request_metadata.get("api_base")
+        address = request_metadata.get("api_base") or os.environ.get("OPENAI_API_BASE")
         if not address:
             raise ValueError("the environment variable OPENAI_API_BASE must be set.")
-        key = os.environ.get("OPENAI_API_KEY") or request_metadata.get("api_key")
-        print(f"api key sent in request header: {key}")
+        key = request_metadata.get("api_key") or os.environ.get("OPENAI_API_KEY")
         if not key:
             raise ValueError(f"the environment variable OPENAI_API_KEY must be set. {request_metadata}")
         headers = {"Authorization": f"Bearer {key}"}
