@@ -167,7 +167,7 @@ def create_engine_config(engine_config_file):
     return configs, engine_config["run_config"]
 
 
-def run_benchmark(args, engine_config, run_config, checkpoint=None):
+def run_benchmark(args, engine_config, run_config, checkpoint=None, checkpoint_path=None):
     checkpoint = checkpoint or {}
     base_url = f"http://localhost:{engine_config['args']['port']}/v1"
     model = engine_config["args"].get("model") or engine_config["args"].get(
@@ -347,6 +347,8 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             checkpoint[engine_config_hash]["runs"][run_config_hash]["status"] = (
                 "success"
             )
+            if checkpoint_path:
+                save_checkpoint(checkpoint, checkpoint_path)
     except Exception as e:
         print(f"Error during {engine_config_id} benchmark: {e}")
         checkpoint[engine_config_hash]["runs"][run_config_hash]["status"] = (
@@ -388,7 +390,7 @@ def main(args):
 
         for engine_config in tqdm(engine_configs, desc="Running engine configs"):
             new_checkpoint = run_benchmark(
-                args, engine_config, run_config, new_checkpoint
+                args, engine_config, run_config, new_checkpoint, new_ckpt_path
             )
             save_checkpoint(new_checkpoint, new_ckpt_path)
             # break

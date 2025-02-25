@@ -1530,7 +1530,7 @@ class LLMAnalysis:
         assert os.path.isdir(output_dir), f"{output_dir} is not a directory"
         
         # Check if the file exists to determine if we need to write headers
-        file_exists = os.path.isfile(os.path.join(output_dir, file_name))
+        file_exists = os.path.isfile(file_name)
 
         # Open the CSV file in append mode
         with open(file_name, "a", newline="") as csvfile:
