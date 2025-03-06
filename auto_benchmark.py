@@ -7,6 +7,7 @@ import hashlib
 import argparse
 import threading
 import itertools
+from argparse import Namespace
 
 from tqdm import tqdm
 from pathlib import Path
@@ -20,6 +21,7 @@ from llm_benchmark.hardware import tools as hardware_tools
 from llm_benchmark.hardware import monitor as hw_monitor
 from llm_benchmark.engine import tools as engine_tools
 from llm_benchmark.model import analysis as model_tools
+from llm_benchmark.benchmark.litellm_proxy.utils import compute_latency_factors
 
 
 def create_config(run_config):
@@ -90,9 +92,9 @@ def save_checkpoint(checkpoint, savepath):
         json.dump(checkpoint, fp, indent=4)
 
 
-def warmup_benchmark(model, base_url, benchmark_script):
+def warmup_benchmark(model, base_url, benchmark_script, env_values=None, latency_factors=None):
     print("Running warmup benchmark")
-    result = benchmark_tools.run_benchmark(
+    _ = benchmark_tools.run_benchmark(
         model,
         base_url,
         250,
@@ -101,6 +103,8 @@ def warmup_benchmark(model, base_url, benchmark_script):
         benchmark_script,
         os.environ["PROFILER_RESULT_DIR"],
         "warmup",
+        env_values=env_values,
+        latency_factors=latency_factors,
     )
 
 
@@ -166,11 +170,14 @@ def create_engine_config(engine_config_file):
 def run_benchmark(args, engine_config, run_config, checkpoint=None):
     checkpoint = checkpoint or {}
     base_url = f"http://localhost:{engine_config['args']['port']}/v1"
-    model = engine_config["args"].get("model") or engine_config["args"].get("model-path")
+    model = engine_config["args"].get("model") or engine_config["args"].get(
+        "model-path"
+    )
 
     engine_kwargs = {
+        "engine": args.engine,
         "docker_image": args.docker_image,
-        "env_values": engine_config["envs"] if engine_config else [],
+        "env_values": engine_config["envs"] if engine_config else {},
         "result_dir": os.environ["PROFILER_RESULT_DIR"],
         "extra_args": engine_config["args"] if engine_config else [],
         "device": args.device,
@@ -190,10 +197,15 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             "runs": {},
         }
 
+    engine_tools.save_engine_config(engine_config_id, Namespace(**engine_config["args"]))
+    engine_tools.save_engine_envs(engine_config_id, engine_config["envs"] if engine_config else {})
+
     if args.docker_image:
         try:
             container_id = single_node_controller.deploy_model(
-                engine_config_id=engine_config_id, port=engine_config["args"]["port"], **engine_kwargs
+                engine_config_id=engine_config_id,
+                port=engine_config["args"]["port"],
+                **engine_kwargs,
             )
         except Exception as e:
             print(f"Error during {engine_config_id} deployment: {e}")
@@ -212,9 +224,14 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
                 return checkpoint
 
     try:
-        warmup_benchmark(model, base_url, args.benchmark_script)
+        latency_factors = None
+        if args.engine == "litellm_proxy":
+            latency_factors = {"T_base": 0.5, "T_input": 0.005, "T_output": 0.005}
+        warmup_benchmark(model, base_url, args.benchmark_script, env_values=engine_config["envs"] if engine_config else None, latency_factors=latency_factors)
     except Exception as e:
         print(f"Error during {engine_config_id} warm up: {e}")
+        if container_id:
+            single_node_controller.remove_container(container_id)
         checkpoint[engine_config_hash]["status"] = "warmup_failed"
         if container_id:
             single_node_controller.remove_container(container_id)
@@ -229,6 +246,15 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
 
     try:
         configs = create_config(run_config)
+        latency_factors = None
+        if args.engine == "litellm_proxy":
+            litellm_master_key = engine_config["envs"].get("LITELLM_MASTER_KEY")
+            request_metadata = {
+                "api_key": os.getenv("OPENAI_API_KEY"),
+                "litellm_proxy_url": base_url,
+                "litellm_master_key": litellm_master_key
+            }
+            latency_factors = compute_latency_factors(model, request_metadata=request_metadata)
         for config in tqdm(configs, desc="Running benchmarks"):
             print(config)
             run_config_hash = hashlib.sha1(
@@ -281,6 +307,8 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
                 args.benchmark_script,
                 os.environ["PROFILER_RESULT_DIR"],
                 run_id,
+                env_values=engine_config["envs"] if engine_config else None,
+                latency_factors=latency_factors,
             )
 
             result["engine"] = args.engine
@@ -290,17 +318,18 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             result["output_tokens"] = config["output_tokens"]
             result["concurrency"] = config["concurrency"]
 
-            # model_analysis = model_tools.infer(
-            #     model_name=model, 
-            #     device_config=device_config,
-            #     seq_len=config["input_tokens"], 
-            #     num_tokens_to_generate=config["output_tokens"], 
-            #     batch_size_per_gpu=config["concurrency"],
-            #     tp_size=engine_config["args"].get("tensor-parallel-size", 1),
-            #     output_dir=os.environ["PROFILER_RESULT_DIR"],
-            #     log_level="ERROR",
-            #     run_id=run_id
-            # )
+            # if args.engine != "litellm_proxy":
+            #     _ = model_tools.infer(
+            #         model_name=model,
+            #         device_config=device_config,
+            #         seq_len=config["input_tokens"],
+            #         num_tokens_to_generate=config["output_tokens"],
+            #         batch_size_per_gpu=config["concurrency"],
+            #         tp_size=engine_config["args"].get("tensor-parallel-size", 1),
+            #         output_dir=os.environ["PROFILER_RESULT_DIR"],
+            #         run_id=run_id,
+            #         log_level="ERROR",
+            #     )
 
             results.append(result)
 
@@ -322,8 +351,8 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             "benchmark_failed"
         )
     finally:
-        if container_id:
-            single_node_controller.remove_container(container_id)
+        # if container_id:
+        #     single_node_controller.remove_container(container_id)
         if log_metrics_task is not None and stop_event is not None:
             stop_event.set()
             log_metrics_task.join()
@@ -369,7 +398,9 @@ def main(args):
         )
 
     if args.profile_hardware:
-        hardware_info = hardware_tools.get_hardware_info(output_dir=os.environ["PROFILER_RESULT_DIR"])
+        hardware_info = hardware_tools.get_hardware_info(
+            output_dir=os.environ["PROFILER_RESULT_DIR"]
+        )
 
 
 if __name__ == "__main__":
@@ -390,7 +421,7 @@ if __name__ == "__main__":
         "--engine",
         type=str,
         default="bud",
-        choices=["vllm", "sglang", "bud"], 
+        choices=["vllm", "sglang", "bud", "litellm_proxy"],
         help="The engine to be used for the testing.",
     )
     args.add_argument(

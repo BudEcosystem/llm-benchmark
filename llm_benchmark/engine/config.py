@@ -158,12 +158,48 @@ def get_config_from_sglang(config: dict, envs: dict):
         hpu_decode_block=None,
     )
 
-
+def get_config_from_litellm_proxy(config: dict, envs: dict):
+    return EngineConfig(
+        model_name=config.get("model"),
+        tensor_parallel_size=config.get("tp_size"),
+        pipeline_parallel_size=None,
+        kv_cache_dtype=config.get("kv_cache_dtype"),
+        distributed_backend=None,
+        gpu_memory_utilization=None,
+        swap_space=None,
+        cpu_kv_cache_size=None,
+        block_size=None,
+        max_num_batched_tokens=config.get("max_total_tokens"),
+        max_num_seqs=config.get("max_running_requests"),
+        enable_prefix_cache=True,
+        enable_chunked_prefill=True,
+        chunked_prefill_size=config.get("chunked_prefill_size"),
+        max_prefill_tokens=config.get("max_prefill_tokens"),
+        disable_sliding_window=None,
+        quantization=config.get("quantization"),
+        rope_scaling=None,
+        enforce_eager=None,
+        max_seq_len_to_capture=None,
+        num_scheduler_steps=config.get("num_continuous_decode_steps"),
+        scheduler_delay_factor=None,
+        schedule_policy=config.get("schedule_policy"),
+        schedule_conservativeness=config.get("schedule_conservativeness"),
+        stream_interval=config.get("stream_interval"),
+        attention_backend=config.get("attention_backend"),
+        sampling_backend=config.get("sampling_backend"),
+        enable_torch_compile=config.get("enable_torch_compile"),
+        hpu_prompt_bs=None,
+        hpu_decode_bs=None,
+        hpu_prompt_seq=None,
+        hpu_decode_block=None,
+    )
 
 def get_engine_config(engine: str, config: dict, envs: dict):
     if engine == "vllm":
         return get_config_from_vllm(config, envs)
     elif engine == "sglang":
         return get_config_from_sglang(config, envs)
+    elif engine == "litellm_proxy":
+        return get_config_from_litellm_proxy(config, envs)
     else:
         raise ValueError(f"Engine {engine} not supported")
