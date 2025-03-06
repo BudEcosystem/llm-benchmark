@@ -169,7 +169,7 @@ def format_budlatent_result(result):
     formatted_result["model"] = result["model"]
     formatted_result["completed"] = result["completed"]
     formatted_result["request_throughput"] = result["request_throughput"]
-    formatted_result["mean_end_to_end_latency"] = result["mean_e2el_ms"]
+    formatted_result["mean_end_to_end_latency"] = result["mean_e2el_s"]
     formatted_result["duration"] = result["duration"]
 
     return formatted_result

@@ -382,31 +382,17 @@ async def warmup_server(
 async def benchmark_fn(
     url: str,
     model: str,
-    dataset_path: str,
-    tokenizer: PreTrainedTokenizerBase,
-    input_column: str,
-    output_column: str,
-    num_tokens: int,
+    input_requests: List[Tuple[str, int, int]],
     num_requests: int,
     max_concurrent: int,
     request_rate: float,
     batch_size: int,
-    seed: int,
 ) -> List[float]:
     """Benchmark the embedding server with customization options."""
     pbar = tqdm(total=num_requests, desc="Benchmarking requests")
 
     async with aiohttp.ClientSession() as session:
         semaphore = asyncio.Semaphore(max_concurrent)
-
-        # Generate dataset
-        input_requests = sample_sharegpt_requests(
-            dataset_path=dataset_path,
-            num_requests=num_requests * batch_size,
-            tokenizer=tokenizer,
-            mean_input_len=num_tokens,
-            seed=seed,
-        )
 
         async def task(payload):
             async with semaphore:
@@ -455,22 +441,26 @@ async def benchmark(
             params["warmup_requests"],
         )
 
+    # Generate dataset
+    input_requests = sample_sharegpt_requests(
+        dataset_path=args.dataset,
+        num_requests=params["requests"] * params["batch_size"],
+        tokenizer=tokenizer,
+        mean_input_len=params["num_tokens"],
+        seed=args.seed,
+    )
+
     benchmark_start_time = time.perf_counter()
 
     # Run benchmark
     timings = await benchmark_fn(
         args.url,
         args.model,
-        args.dataset,
-        tokenizer,
-        args.input_column,
-        args.output_column,
-        params["num_tokens"],
+        input_requests,
         params["requests"],
         params["max_concurrent"],
         params["request_rate"],
         params["batch_size"],
-        args.seed,
     )
 
     benchmark_duration = time.perf_counter() - benchmark_start_time
@@ -522,28 +512,28 @@ async def benchmark(
         print(
             "{:<40} {:<10.2f}".format(
                 f"Mean {metric_name} (ms):",
-                metrics.get(f"mean_{metric_attribute_name}_ms"),
+                metrics.get(f"mean_{metric_attribute_name}_s", 0) * 1000,
             )
         )
         print(
             "{:<40} {:<10.2f}".format(
                 f"Median {metric_name} (ms):",
-                metrics.get(f"median_{metric_attribute_name}_ms"),
+                metrics.get(f"median_{metric_attribute_name}_s", 0) * 1000,
             )
         )
-        result[f"mean_{metric_attribute_name}_ms"] = metrics.get(
-            f"mean_{metric_attribute_name}_ms"
+        result[f"mean_{metric_attribute_name}_s"] = metrics.get(
+            f"mean_{metric_attribute_name}_s"
         )
-        result[f"median_{metric_attribute_name}_ms"] = metrics.get(
-            f"median_{metric_attribute_name}_ms"
+        result[f"median_{metric_attribute_name}_s"] = metrics.get(
+            f"median_{metric_attribute_name}_s"
         )
-        result[f"std_{metric_attribute_name}_ms"] = metrics.get(
-            f"std_{metric_attribute_name}_ms"
+        result[f"std_{metric_attribute_name}_s"] = metrics.get(
+            f"std_{metric_attribute_name}_s"
         )
-        for p, value in metrics.get(f"percentiles_{metric_attribute_name}_ms"):
+        for p, value in metrics.get(f"percentiles_{metric_attribute_name}_s"):
             p_word = str(int(p)) if int(p) == p else str(p)
-            print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name} (ms):", value))
-            result[f"p{p_word}_{metric_attribute_name}_ms"] = value
+            print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name} (ms):", value * 1000))
+            result[f"p{p_word}_{metric_attribute_name}_s"] = value
 
     process_one_metric("e2el", "E2EL", "End-to-end Latency")
 
@@ -563,20 +553,20 @@ def calculate_metrics(
         return {
             "completed": 0,
             "request_throughput": 0,
-            "mean_e2el_ms": 0,
-            "median_e2el_ms": 0,
-            "std_e2el_ms": 0,
-            "percentiles_e2el_ms": [],
+            "mean_e2el_s": 0,
+            "median_e2el_s": 0,
+            "std_e2el_s": 0,
+            "percentiles_e2el_s": [],
         }
 
     return {
         "completed": len(timings),
         "request_throughput": total_requests / duration,
-        "mean_e2el_ms": np.mean(timings or 0) * 1000,
-        "std_e2el_ms": np.std(timings or 0) * 1000,
-        "median_e2el_ms": np.median(timings or 0) * 1000,
-        "percentiles_e2el_ms": [
-            (p, np.percentile(timings or 0, p) * 1000) for p in selected_percentiles
+        "mean_e2el_s": np.mean(timings or 0),
+        "std_e2el_s": np.std(timings or 0),
+        "median_e2el_s": np.median(timings or 0),
+        "percentiles_e2el_s": [
+            (p, np.percentile(timings or 0, p)) for p in selected_percentiles
         ],
     }
 
