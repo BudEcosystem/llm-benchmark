@@ -12,6 +12,9 @@ from llm_benchmark.benchmark.llmperf.token_benchmark_ray import (
 from llm_benchmark.benchmark.litellm_proxy.token_benchmark_ray import (
     run_token_benchmark as litellm_run_benchmark,
 )
+from llm_benchmark.benchmark.budlatent.benchmark_embedding_servings import (
+    run_benchmark as budlatent_run_benchmark,
+)
 from llm_benchmark.profiler.constants import VllmProfileLayer
 from llm_benchmark.profiler.record_function_tracer import RecordFunctionTracer
 
@@ -38,21 +41,21 @@ def create_summary(results, results_dir, profiler_result: bool = False):
         summary["Completed Requests"] = result["completed"]
         summary["Duration (s)"] = round(result["duration"], 2)
         summary["Request Throughput (req/min)"] = round(
-            result["request_throughput_per_min"], 2
+            result.get("request_throughput_per_min", 0), 2
         )
         summary["Output Token Throughput (tok/s)"] = round(
-            result["output_throughput"], 2
+            result.get("output_throughput", 0), 2
         )
         summary["Output Token Throughput per User (tok/s)"] = round(
-            result["output_throughput_per_user"], 2
+            result.get("output_throughput_per_user", 0), 2
         )
         summary["Mean End to End Latency (s)"] = round(
             result["mean_end_to_end_latency"], 2
         )
-        summary["Mean TTFT (ms)"] = round(result["mean_ttft_ms"], 2)
-        summary["P95 TTFT (ms)"] = round(result["p95_ttft_ms"], 2)
-        summary["Mean Inter Token Latency (ms)"] = round(result["mean_itl_ms"], 2)
-        summary["P95 Inter Token Latency (ms)"] = round(result["p95_itl_ms"], 2)
+        summary["Mean TTFT (ms)"] = round(result.get("mean_ttft_ms", 0), 2)
+        summary["P95 TTFT (ms)"] = round(result.get("p95_ttft_ms", 0), 2)
+        summary["Mean Inter Token Latency (ms)"] = round(result.get("mean_itl_ms", 0), 2)
+        summary["P95 Inter Token Latency (ms)"] = round(result.get("p95_itl_ms", 0), 2)
 
         if profiler_result:
             for layer in layers:
@@ -161,6 +164,17 @@ def format_llmperf_result(result):
     return formatted_result
 
 
+def format_budlatent_result(result):
+    formatted_result = {}
+    formatted_result["model"] = result["model"]
+    formatted_result["completed"] = result["completed"]
+    formatted_result["request_throughput"] = result["request_throughput"]
+    formatted_result["mean_end_to_end_latency"] = result["mean_e2el_ms"]
+    formatted_result["duration"] = result["duration"]
+
+    return formatted_result
+
+
 def run_benchmark(
     model: str,
     base_url: str,
@@ -212,6 +226,11 @@ def run_benchmark(
             model, concurrency, concurrency, input_token, 0, output_token, 0
         )
         result_output = format_llmperf_result(result_output)
+    elif benchmark_script == "budlatent":
+        result_output = budlatent_run_benchmark(
+            model, input_token, output_token, concurrency, base_url
+        )
+        result_output = format_budlatent_result(result_output)
     elif benchmark_script == "litellm_proxy":
         litellm_master_key = env_values.get("LITELLM_MASTER_KEY")
         if litellm_master_key is None:

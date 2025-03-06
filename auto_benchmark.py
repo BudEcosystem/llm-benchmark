@@ -7,6 +7,7 @@ import hashlib
 import argparse
 import threading
 import itertools
+import traceback
 from argparse import Namespace
 
 from tqdm import tqdm
@@ -43,7 +44,7 @@ def create_config(run_config):
                 }
                 configs.append(config)
         return configs
-    
+
     input_tokens = (
         [int(x) for x in run_config["mean_input_tokens"]]
         if isinstance(run_config["mean_input_tokens"], list)
@@ -51,10 +52,9 @@ def create_config(run_config):
     )
     output_tokens = (
         [int(x) for x in run_config["mean_output_tokens"]]
-        if isinstance(run_config["mean_output_tokens"], list)
-        else [run_config["mean_output_tokens"]]
+        if isinstance(run_config.get("mean_output_tokens"), list)
+        else [run_config.get("mean_output_tokens", 1)]
     )
-    
 
     for input_token in input_tokens:
         if input_token < 20:
@@ -92,7 +92,9 @@ def save_checkpoint(checkpoint, savepath):
         json.dump(checkpoint, fp, indent=4)
 
 
-def warmup_benchmark(model, base_url, benchmark_script, env_values=None, latency_factors=None):
+def warmup_benchmark(
+    model, base_url, benchmark_script, env_values=None, latency_factors=None
+):
     print("Running warmup benchmark")
     _ = benchmark_tools.run_benchmark(
         model,
@@ -164,19 +166,32 @@ def create_engine_config(engine_config_file):
             # Append the complete config to the list
             configs.append(new_config)
 
-    return configs, engine_config["run_config"]
+    return (
+        configs,
+        engine_config["run_config"],
+        {
+            "run_command": engine_config.get("run_command"),
+            "health_check_endpoint": engine_config.get("health_check_endpoint"),
+            "benchmark_endpoint": engine_config.get("benchmark_endpoint"),
+        },
+    )
 
 
-def run_benchmark(args, engine_config, run_config, checkpoint=None):
+def run_benchmark(args, engine_config, run_config, extras=None, checkpoint=None):
     checkpoint = checkpoint or {}
-    base_url = f"http://localhost:{engine_config['args']['port']}/v1"
-    model = engine_config["args"].get("model") or engine_config["args"].get(
-        "model-path"
+    base_url = f"http://localhost:{engine_config['args']['port']}" + (
+        extras.get("benchmark_endpoint") or "/v1"
+    )
+    model = (
+        engine_config["args"].get("model")
+        or engine_config["args"].get("model-path")
+        or engine_config["args"].get("model-id")
     )
 
     engine_kwargs = {
         "engine": args.engine,
         "docker_image": args.docker_image,
+        "run_command": extras.get("run_command"),
         "env_values": engine_config["envs"] if engine_config else {},
         "result_dir": os.environ["PROFILER_RESULT_DIR"],
         "extra_args": engine_config["args"] if engine_config else [],
@@ -197,14 +212,19 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             "runs": {},
         }
 
-    engine_tools.save_engine_config(engine_config_id, Namespace(**engine_config["args"]))
-    engine_tools.save_engine_envs(engine_config_id, engine_config["envs"] if engine_config else {})
+    engine_tools.save_engine_config(
+        engine_config_id, Namespace(**engine_config["args"])
+    )
+    engine_tools.save_engine_envs(
+        engine_config_id, engine_config["envs"] if engine_config else {}
+    )
 
     if args.docker_image:
         try:
             container_id = single_node_controller.deploy_model(
                 engine_config_id=engine_config_id,
                 port=engine_config["args"]["port"],
+                health_check_endpoint=extras.get("health_check_endpoint"),
                 **engine_kwargs,
             )
         except Exception as e:
@@ -227,11 +247,15 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
         latency_factors = None
         if args.engine == "litellm_proxy":
             latency_factors = {"T_base": 0.5, "T_input": 0.005, "T_output": 0.005}
-        warmup_benchmark(model, base_url, args.benchmark_script, env_values=engine_config["envs"] if engine_config else None, latency_factors=latency_factors)
+        warmup_benchmark(
+            model,
+            base_url,
+            args.benchmark_script,
+            env_values=engine_config["envs"] if engine_config else None,
+            latency_factors=latency_factors,
+        )
     except Exception as e:
         print(f"Error during {engine_config_id} warm up: {e}")
-        if container_id:
-            single_node_controller.remove_container(container_id)
         checkpoint[engine_config_hash]["status"] = "warmup_failed"
         if container_id:
             single_node_controller.remove_container(container_id)
@@ -252,9 +276,11 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             request_metadata = {
                 "api_key": os.getenv("OPENAI_API_KEY"),
                 "litellm_proxy_url": base_url,
-                "litellm_master_key": litellm_master_key
+                "litellm_master_key": litellm_master_key,
             }
-            latency_factors = compute_latency_factors(model, request_metadata=request_metadata)
+            latency_factors = compute_latency_factors(
+                model, request_metadata=request_metadata
+            )
         for config in tqdm(configs, desc="Running benchmarks"):
             print(config)
             run_config_hash = hashlib.sha1(
@@ -298,61 +324,74 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             )
             log_metrics_task.start()
 
-            result = benchmark_tools.run_benchmark(
-                model,
-                base_url,
-                config["input_tokens"],
-                config["output_tokens"],
-                config["concurrency"],
-                args.benchmark_script,
+            try:
+                result = benchmark_tools.run_benchmark(
+                    model,
+                    base_url,
+                    config["input_tokens"],
+                    config["output_tokens"],
+                    config["concurrency"],
+                    args.benchmark_script,
+                    os.environ["PROFILER_RESULT_DIR"],
+                    run_id,
+                    env_values=engine_config["envs"] if engine_config else None,
+                    latency_factors=latency_factors,
+                )
+
+                result["engine"] = args.engine
+                result["engine_config_id"] = engine_config_id
+                result["run_id"] = run_id
+                result["input_tokens"] = config["input_tokens"]
+                result["output_tokens"] = config["output_tokens"]
+                result["concurrency"] = config["concurrency"]
+
+                # if args.engine != "litellm_proxy":
+                #     _ = model_tools.infer(
+                #         model_name=model,
+                #         device_config=device_config,
+                #         seq_len=config["input_tokens"],
+                #         num_tokens_to_generate=config["output_tokens"],
+                #         batch_size_per_gpu=config["concurrency"],
+                #         tp_size=engine_config["args"].get("tensor-parallel-size", 1),
+                #         output_dir=os.environ["PROFILER_RESULT_DIR"],
+                #         run_id=run_id,
+                #         log_level="ERROR",
+                #     )
+
+                results.append(result)
+            except ValueError as e:
+                print(f"Error during {engine_config_id}:{run_id} benchmark: {e}")
+                checkpoint[engine_config_hash]["runs"][run_config_hash]["status"] = (
+                    "benchmark_failed"
+                )
+                continue
+            finally:
+                time.sleep(1)
+
+                stop_event.set()
+                log_metrics_task.join()
+                log_metrics_task = None
+                stop_event = None
+
+            benchmark_tools.create_summary(
+                [result],
                 os.environ["PROFILER_RESULT_DIR"],
-                run_id,
-                env_values=engine_config["envs"] if engine_config else None,
-                latency_factors=latency_factors,
+                profiler_result=args.profile_model,
             )
-
-            result["engine"] = args.engine
-            result["engine_config_id"] = engine_config_id
-            result["run_id"] = run_id
-            result["input_tokens"] = config["input_tokens"]
-            result["output_tokens"] = config["output_tokens"]
-            result["concurrency"] = config["concurrency"]
-
-            # if args.engine != "litellm_proxy":
-            #     _ = model_tools.infer(
-            #         model_name=model,
-            #         device_config=device_config,
-            #         seq_len=config["input_tokens"],
-            #         num_tokens_to_generate=config["output_tokens"],
-            #         batch_size_per_gpu=config["concurrency"],
-            #         tp_size=engine_config["args"].get("tensor-parallel-size", 1),
-            #         output_dir=os.environ["PROFILER_RESULT_DIR"],
-            #         run_id=run_id,
-            #         log_level="ERROR",
-            #     )
-
-            results.append(result)
-
-            time.sleep(1)
-
-            stop_event.set()
-            log_metrics_task.join()
-            log_metrics_task = None
-            stop_event = None
-            
-            benchmark_tools.create_summary([result], os.environ["PROFILER_RESULT_DIR"], profiler_result=args.profile_model)
             print(result)
             checkpoint[engine_config_hash]["runs"][run_config_hash]["status"] = (
                 "success"
             )
     except Exception as e:
         print(f"Error during {engine_config_id} benchmark: {e}")
+        print("Stacktrace:")
+        print(traceback.format_exc())
         checkpoint[engine_config_hash]["runs"][run_config_hash]["status"] = (
             "benchmark_failed"
         )
     finally:
-        # if container_id:
-        #     single_node_controller.remove_container(container_id)
+        if container_id:
+            single_node_controller.remove_container(container_id)
         if log_metrics_task is not None and stop_event is not None:
             stop_event.set()
             log_metrics_task.join()
@@ -380,13 +419,15 @@ def main(args):
 
     if args.run_benchmark:
         if args.engine_config_file:
-            engine_configs, run_config = create_engine_config(args.engine_config_file)
+            engine_configs, run_config, extras = create_engine_config(
+                args.engine_config_file
+            )
         else:
             raise ValueError("Engine config file is required")
 
         for engine_config in tqdm(engine_configs, desc="Running engine configs"):
             new_checkpoint = run_benchmark(
-                args, engine_config, run_config, new_checkpoint
+                args, engine_config, run_config, extras, new_checkpoint
             )
             save_checkpoint(new_checkpoint, new_ckpt_path)
             # break
@@ -421,7 +462,7 @@ if __name__ == "__main__":
         "--engine",
         type=str,
         default="bud",
-        choices=["vllm", "sglang", "bud", "litellm_proxy"],
+        choices=["vllm", "sglang", "bud", "litellm_proxy", "budlatent"],
         help="The engine to be used for the testing.",
     )
     args.add_argument(

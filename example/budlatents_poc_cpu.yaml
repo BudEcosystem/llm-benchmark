@@ -1,0 +1,81 @@
+args:
+  model-id:
+    - sentence-transformers/all-MiniLM-L6-v2 # 22m, dim: 384, ctx: 256
+    # - thenlper/gte-small-zh # 30m, dim: 1024, ctx: 512
+    # - BAAI/bge-small-zh # 33m, dim: 512, ctx: 512
+    # - Lajavaness/bilingual-embedding-small # 117m, dim: 384, ctx: 512
+    # - sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 # 118m, dim: 768, ctx: 512
+    # - jinaai/jina-embeddings-v2-base-en # 137m, dim: 768, ctx: 8192
+    # # - Alibaba-NLP/gte-modernbert-base # 149m, dim: 768, ctx: 8192
+    # - intfloat/multilingual-e5-base # 278m, dim: 768, ctx: 512
+    # - Alibaba-NLP/gte-multilingual-base # 305m, dim: 1024, ctx: 8192
+    - Alibaba-NLP/gte-large-en-v1.5 # 434m, dim: 1024, ctx: 8192
+    # - HIT-TMG/KaLM-embedding-multilingual-mini-instruct-v1 # 494m, dim: 896, ctx: 131072
+    - intfloat/multilingual-e5-large-instruct # 560m, dim: 1024, ctx: 514
+    # - manu/bge-m3-custom-fr # 567m, dim: 1024, ctx: 8194
+    # - dunzhang/stella_en_400M_v5 # 435m, dim: 4096, ctx: 8192 
+    # - Alibaba-NLP/gte-Qwen2-1.5B-instruct # 1b, dim: 8960, ctx: 131072
+    # - manu/sentence_croissant_alpha_v0.3 # 1b, dim: 2048, ctx: 2048
+    # - DeepPavlov/rubert-base-cased # 1b, dim: 768, ctx: 512
+    # # - colqwen2-v1.0-merged # 2.21b, dim: 1024, ctx: 32768
+  port: 8989
+  batch-size: 1024
+  engine:
+    - torch
+    # - ctranslate2
+    # - optimum
+  lengths-via-tokenize: true
+  trust-remote-code: true
+  dtype: bfloat16
+  device: cpu
+  no-model-warmup: true
+
+run_command: v2
+health_check_endpoint: /health
+benchmark_endpoint: /embeddings
+
+envs:
+  DO_NOT_TRACK: 1
+  ENABLE_PROFILING: true
+
+run_config:
+  token_pairs:
+    - 50,200
+    - 100,150
+    - 150,100
+    - 200,50
+    - 100,400
+    - 200,300
+    - 300,200
+    - 400,100
+    - 200,800
+    - 400,600
+    - 600,400
+    - 800,200
+    - 400,1600
+    - 800,1200
+    - 1200,800
+    - 1600,400
+    - 1800,200
+    - 800,3200
+    - 1600,2400
+    - 2400,1600
+    - 3200,800
+    - 3600,400
+    - 4000,100
+    - 4800,100
+    - 5200,100
+    - 5600,100
+    - 6000,100
+    - 6400,100
+    - 6800,100
+    - 7200,100
+    - 8000,100
+  num_concurrent_requests: 
+    - 1
+    - 8
+    - 16
+    - 32
+    - 64
+    - 128
+    - 256
