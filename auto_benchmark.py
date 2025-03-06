@@ -290,17 +290,17 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             result["output_tokens"] = config["output_tokens"]
             result["concurrency"] = config["concurrency"]
 
-            model_analysis = model_tools.infer(
-                model_name=model, 
-                device_config=device_config,
-                seq_len=config["input_tokens"], 
-                num_tokens_to_generate=config["output_tokens"], 
-                batch_size_per_gpu=config["concurrency"],
-                tp_size=engine_config["args"].get("tensor-parallel-size", 1),
-                output_dir=os.environ["PROFILER_RESULT_DIR"],
-                log_level="ERROR",
-                run_id=run_id
-            )
+            # model_analysis = model_tools.infer(
+            #     model_name=model, 
+            #     device_config=device_config,
+            #     seq_len=config["input_tokens"], 
+            #     num_tokens_to_generate=config["output_tokens"], 
+            #     batch_size_per_gpu=config["concurrency"],
+            #     tp_size=engine_config["args"].get("tensor-parallel-size", 1),
+            #     output_dir=os.environ["PROFILER_RESULT_DIR"],
+            #     log_level="ERROR",
+            #     run_id=run_id
+            # )
 
             results.append(result)
 
