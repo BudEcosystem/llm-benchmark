@@ -68,7 +68,7 @@ def get_token_throughput_latencies(
         The individual metrics for each request.
     """
     random.seed(11111)
-
+    print("Inside get token throughput latencies")
     tokenizer = LlamaTokenizerFast.from_pretrained(
         "hf-internal-testing/llama-tokenizer"
     )
@@ -79,6 +79,7 @@ def get_token_throughput_latencies(
         additional_sampling_params = {}
 
     clients = construct_clients(llm_api=llm_api, num_clients=num_concurrent_requests)
+    print("clients constructed")
     req_launcher = RequestsLauncher(clients)
     completed_requests = []
     num_completed_requests = 0
@@ -86,6 +87,7 @@ def get_token_throughput_latencies(
     num_output_tokens_list = []
     prompts = []
     for i in range(max_num_completed_requests):
+        print(f"iter : {i}")
         num_output_tokens = (sample_random_positive_int(
             mean_output_tokens, stddev_output_tokens
         ))
@@ -118,6 +120,7 @@ def get_token_throughput_latencies(
         )
         request_config.metadata = request_metadata
         if latency_factors:
+            print(f"Latency factors in get_token_throughput_latencies : {latency_factors}")
             request_config.metadata["api_key"] = "fake-api-key"
             request_config.metadata["mock_delay"] = calculate_mock_delay(num_input_tokens, num_output_tokens, latency_factors)
         req_launcher.launch_requests(request_config)

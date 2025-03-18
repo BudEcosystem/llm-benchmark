@@ -218,9 +218,11 @@ def run_benchmark(
             "litellm_proxy_url": base_url,
             "litellm_master_key": litellm_master_key
         }
+        print(f"Request metadata for litellm benchmark : {request_metadata}")
         result_output = litellm_run_benchmark(
             model, concurrency, concurrency, input_token, 0, output_token, 0, llm_api="mock_litellm_proxy", request_metadata=request_metadata, latency_factors=latency_factors
         )
+        print(f"Result output for litellm benchmark : {result_output}")
         result_output = format_llmperf_result(result_output)
 
     profiler_stats = {}
