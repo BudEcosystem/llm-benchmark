@@ -15,6 +15,8 @@ from llm_benchmark.benchmark.litellm_proxy.token_benchmark_ray import (
 from llm_benchmark.profiler.constants import VllmProfileLayer
 from llm_benchmark.profiler.record_function_tracer import RecordFunctionTracer
 
+from .schemas import BenchmarkResultSchema
+
 
 def get_profiler_result(result_dir: str):
     record_function_tracer = RecordFunctionTracer(result_dir, get_all=True)
@@ -126,35 +128,85 @@ def format_vllm_result(result):
 
 
 def format_llmperf_result(result):
-    formatted_result = {}
-    formatted_result["model"] = result["model"]
-    formatted_result["concurrency"] = result["num_concurrent_requests"]
-    formatted_result["input_tokens"] = result["mean_input_tokens"]
-    formatted_result["output_tokens"] = result["mean_output_tokens"]
-    formatted_result["completed"] = result["results"]["num_completed_requests"]
-    formatted_result["duration"] = result["results"]["end_to_end_latency_s"]["max"]
-    formatted_result["request_throughput_per_min"] = result["results"][
-        "num_completed_requests_per_min"
-    ]
-    formatted_result["output_throughput"] = result["results"][
-        "mean_output_throughput_token_per_s"
-    ]
-    formatted_result["output_throughput_per_user"] = result["results"][
-        "request_output_throughput_token_per_s"
-    ]["mean"]
-    formatted_result["mean_end_to_end_latency"] = result["results"][
-        "end_to_end_latency_s"
-    ]["mean"]
-    formatted_result["mean_ttft_ms"] = result["results"]["ttft_s"]["mean"] * 1000
-    formatted_result["p95_ttft_ms"] = (
-        result["results"]["ttft_s"]["quantiles"]["p95"] * 1000
+    num_completed_requests = result["results"]["num_completed_requests"]
+    num_requests_completed_per_min = result["results"]["num_completed_requests_per_min"]
+    benchmark_result = BenchmarkResultSchema(
+        model=result["model"],
+        concurrency=result["num_concurrent_requests"],
+        duration=result["results"]["end_to_end_latency_s"]["max"],
+        successful_requests=num_completed_requests,
+        total_input_tokens=result["results"]["number_of_input_tokens"]["mean"]*num_completed_requests,
+        total_output_tokens=result["results"]["number_of_output_tokens"]["mean"]*num_completed_requests,
+        request_throughput=num_requests_completed_per_min,
+        input_throughput=result["results"]["number_of_input_tokens"]["mean"]*num_requests_completed_per_min,
+        output_throughput=result["results"]["mean_output_throughput_token_per_s"],
+        p25_throughput=result["results"]["request_output_throughput_token_per_s"]["quantiles"]["p25"],
+        p75_throughput=result["results"]["request_output_throughput_token_per_s"]["quantiles"]["p75"],
+        p95_throughput=result["results"]["request_output_throughput_token_per_s"]["quantiles"]["p95"],
+        p99_throughput=result["results"]["request_output_throughput_token_per_s"]["quantiles"]["p99"],
+        min_throughput=result["results"]["request_output_throughput_token_per_s"]["min"],
+        max_throughput=result["results"]["request_output_throughput_token_per_s"]["max"],
+        mean_ttft_ms=result["results"]["ttft_s"]["mean"]*1000,
+        median_ttft_ms=result["results"]["ttft_s"]["median"]*1000,
+        p25_ttft_ms=result["results"]["ttft_s"]["quantiles"]["p25"]*1000,
+        p75_ttft_ms=result["results"]["ttft_s"]["quantiles"]["p75"]*1000,
+        p95_ttft_ms=result["results"]["ttft_s"]["quantiles"]["p95"]*1000,
+        p99_ttft_ms=result["results"]["ttft_s"]["quantiles"]["p99"]*1000,
+        min_ttft_ms=result["results"]["ttft_s"]["min"]*1000,
+        max_ttft_ms=result["results"]["ttft_s"]["max"]*1000,
+        mean_tpot_ms=result["results"]["tpot_s"]["mean"]*1000,
+        median_tpot_ms=result["results"]["tpot_s"]["median"]*1000,
+        p25_tpot_ms=result["results"]["tpot_s"]["quantiles"]["p25"]*1000,
+        p75_tpot_ms=result["results"]["tpot_s"]["quantiles"]["p75"]*1000,
+        p95_tpot_ms=result["results"]["tpot_s"]["quantiles"]["p95"]*1000,
+        p99_tpot_ms=result["results"]["tpot_s"]["quantiles"]["p99"]*1000,
+        mean_itl_ms=result["results"]["inter_token_latency_s"]["mean"]*1000,
+        meadian_itl_ms=result["results"]["inter_token_latency_s"]["median"]*1000,
+        p25_itl_ms=result["results"]["inter_token_latency_s"]["quantiles"]["p25"]*1000,
+        p75_itl_ms=result["results"]["inter_token_latency_s"]["quantiles"]["p75"]*1000,
+        p95_itl_ms=result["results"]["inter_token_latency_s"]["quantiles"]["p95"]*1000,
+        p99_itl_ms=result["results"]["inter_token_latency_s"]["quantiles"]["p99"]*1000,
+        min_itl_ms=result["results"]["inter_token_latency_s"]["min"]*1000,
+        max_itl_ms=result["results"]["inter_token_latency_s"]["max"]*1000,
+        mean_e2el_ms=result["results"]["end_to_end_latency_s"]["mean"]*1000,
+        median_e2el_ms=result["results"]["end_to_end_latency_s"]["median"]*1000,
+        p25_e2el_ms=result["results"]["end_to_end_latency_s"]["quantiles"]["p25"]*1000,
+        p75_e2el_ms=result["results"]["end_to_end_latency_s"]["quantiles"]["p75"]*1000,
+        p95_e2el_ms=result["results"]["end_to_end_latency_s"]["quantiles"]["p95"]*1000,
+        p99_e2el_ms=result["results"]["end_to_end_latency_s"]["quantiles"]["p99"]*1000,
+        min_e2el_ms=result["results"]["end_to_end_latency_s"]["min"]*1000,
+        max_e2el_ms=result["results"]["end_to_end_latency_s"]["max"]*1000,
     )
-    formatted_result["mean_itl_ms"] = (
-        result["results"]["inter_token_latency_s"]["mean"] * 1000
-    )
-    formatted_result["p95_itl_ms"] = (
-        result["results"]["inter_token_latency_s"]["quantiles"]["p95"] * 1000
-    )
+    # formatted_result = {}
+    # formatted_result["model"] = result["model"]
+    # formatted_result["concurrency"] = result["num_concurrent_requests"]
+    # formatted_result["input_tokens"] = result["mean_input_tokens"]
+    # formatted_result["output_tokens"] = result["mean_output_tokens"]
+    # formatted_result["completed"] = result["results"]["num_completed_requests"]
+    # formatted_result["duration"] = result["results"]["end_to_end_latency_s"]["max"]
+    # formatted_result["request_throughput_per_min"] = result["results"][
+    #     "num_completed_requests_per_min"
+    # ]
+    # formatted_result["output_throughput"] = result["results"][
+    #     "mean_output_throughput_token_per_s"
+    # ]
+    # formatted_result["output_throughput_per_user"] = result["results"][
+    #     "request_output_throughput_token_per_s"
+    # ]["mean"]
+    # formatted_result["mean_end_to_end_latency"] = result["results"][
+    #     "end_to_end_latency_s"
+    # ]["mean"]
+    # formatted_result["mean_ttft_ms"] = result["results"]["ttft_s"]["mean"] * 1000
+    # formatted_result["p95_ttft_ms"] = (
+    #     result["results"]["ttft_s"]["quantiles"]["quantiles"]["p95"] * 1000
+    # )
+    # formatted_result["mean_itl_ms"] = (
+    #     result["results"]["inter_token_latency_s"]["mean"] * 1000
+    # )
+    # formatted_result["p95_itl_ms"] = (
+    #     result["results"]["inter_token_latency_s"]["quantiles"]["quantiles"]["p95"] * 1000
+    # )
+    formatted_result = benchmark_result.model_dump()
     formatted_result["error_messages"] = result["results"].get("error_msg", [])
     return formatted_result
 
