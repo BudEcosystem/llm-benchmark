@@ -31,8 +31,10 @@ class BenchmarkResultSchema(BaseModel):
     p75_tpot_ms: Optional[float] = None
     p95_tpot_ms: Optional[float] = None
     p99_tpot_ms: Optional[float] = None
+    min_tpot_ms: Optional[float] = None
+    max_tpot_ms: Optional[float] = None
     mean_itl_ms: Optional[float] = None
-    meadian_itl_ms: Optional[float] = None
+    median_itl_ms: Optional[float] = None
     p25_itl_ms: Optional[float] = None
     p75_itl_ms: Optional[float] = None
     p95_itl_ms: Optional[float] = None
