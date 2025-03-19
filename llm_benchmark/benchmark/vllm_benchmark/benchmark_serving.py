@@ -30,7 +30,7 @@ import os
 import random
 import time
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
@@ -565,13 +565,13 @@ async def benchmark(
 
     result = {
         "duration": benchmark_duration,
-        "completed": metrics.completed,
+        "successful_requests": metrics.completed,
         "total_input_tokens": metrics.total_input,
         "total_output_tokens": metrics.total_output,
-        "request_throughput": metrics.request_throughput,
-        "output_throughput": metrics.output_throughput,
+        # "request_throughput": metrics.request_throughput,
+        # "output_throughput": metrics.output_throughput,
         "output_throughput_per_user":[output.req_output_throughput for output in outputs],
-        "total_token_throughput": metrics.total_token_throughput,
+        # "total_token_throughput": metrics.total_token_throughput,
         "input_lens": [output.prompt_len for output in outputs],
         "output_lens": actual_output_lens,
         "e2els":[ output.latency for output in outputs],
@@ -579,6 +579,7 @@ async def benchmark(
         "itls": [output.itl for output in outputs],
         "generated_texts": [output.generated_text for output in outputs],
         "errors": [output.error for output in outputs],
+        **asdict(metrics)
     }
 
     def process_one_metric(
@@ -794,6 +795,8 @@ def main(args: argparse.Namespace):
     result_json["best_of"] = args.best_of
     result_json["use_beam_search"] = args.use_beam_search
     result_json["num_prompts"] = args.num_prompts
+    result_json["input_tokens"] = args.random_input_len
+    result_json["output_tokens"] = args.random_output_len
 
     # Metadata
     if args.metadata:
