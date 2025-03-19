@@ -6,11 +6,14 @@ class BenchmarkResultSchema(BaseModel):
     concurrency: int
     duration: float
     successful_requests: int
+    input_tokens: int
+    output_tokens: int
     total_input_tokens: Optional[int] = 0
     total_output_tokens: Optional[int] = 0
     request_throughput: Optional[float] = None
     input_throughput: Optional[float] = None
     output_throughput: Optional[float] = None
+    output_throughput_per_user: Optional[float] = None
     p25_throughput: Optional[float] = None
     p75_throughput: Optional[float] = None
     p95_throughput: Optional[float] = None    
@@ -49,3 +52,4 @@ class BenchmarkResultSchema(BaseModel):
     p99_e2el_ms: Optional[float] = None
     min_e2el_ms: Optional[float] = None
     max_e2el_ms: Optional[float] = None
+    error_messages: Optional[list] = []

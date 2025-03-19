@@ -135,11 +135,14 @@ def format_llmperf_result(result):
         concurrency=result["num_concurrent_requests"],
         duration=result["results"]["end_to_end_latency_s"]["max"],
         successful_requests=num_completed_requests,
+        input_tokens=result["mean_input_tokens"],
+        output_tokens=result["mean_output_tokens"],
         total_input_tokens=result["results"]["number_input_tokens"]["mean"]*num_completed_requests,
         total_output_tokens=result["results"]["number_output_tokens"]["mean"]*num_completed_requests,
         request_throughput=num_requests_completed_per_min,
         input_throughput=result["results"]["number_input_tokens"]["mean"]*num_requests_completed_per_min,
         output_throughput=result["results"]["mean_output_throughput_token_per_s"],
+        output_throughput_per_user=result["results"]["request_output_throughput_token_per_s"]["mean"],
         p25_throughput=result["results"]["request_output_throughput_token_per_s"]["quantiles"]["p25"],
         p75_throughput=result["results"]["request_output_throughput_token_per_s"]["quantiles"]["p75"],
         p95_throughput=result["results"]["request_output_throughput_token_per_s"]["quantiles"]["p95"],
@@ -178,6 +181,7 @@ def format_llmperf_result(result):
         p99_e2el_ms=result["results"]["end_to_end_latency_s"]["quantiles"]["p99"]*1000,
         min_e2el_ms=result["results"]["end_to_end_latency_s"]["min"]*1000,
         max_e2el_ms=result["results"]["end_to_end_latency_s"]["max"]*1000,
+        error_messages=result["results"].get("error_msg", []),
     )
     # formatted_result = {}
     # formatted_result["model"] = result["model"]
@@ -206,11 +210,7 @@ def format_llmperf_result(result):
     # formatted_result["p95_itl_ms"] = (
     #     result["results"]["inter_token_latency_s"]["quantiles"]["quantiles"]["p95"] * 1000
     # )
-    formatted_result = benchmark_result.model_dump()
-    formatted_result["input_tokens"] = result["mean_input_tokens"]
-    formatted_result["output_tokens"] = result["mean_output_tokens"]
-    formatted_result["error_messages"] = result["results"].get("error_msg", [])
-    return formatted_result
+    return benchmark_result.model_dump()
 
 
 def run_benchmark(
