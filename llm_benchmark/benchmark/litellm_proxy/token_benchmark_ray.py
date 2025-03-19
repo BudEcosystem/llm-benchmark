@@ -138,10 +138,16 @@ def get_token_throughput_latencies(
             for out in outs:
                 request_metrics, gen_text, _ = out
                 num_output_tokens = get_token_length(gen_text)
+                latency = request_metrics[common_metrics.E2E_LAT]
+                ttft = request_metrics[common_metrics.TTFT]
                 if num_output_tokens: 
                     request_metrics[common_metrics.INTER_TOKEN_LAT] /= num_output_tokens
                 else:
                     request_metrics[common_metrics.INTER_TOKEN_LAT] = 0
+                if num_output_tokens > 1:
+                    request_metrics[common_metrics.TPOT] = (latency - ttft) / (num_output_tokens - 1)
+                else:
+                    request_metrics[common_metrics.TPOT] = 0
                 request_metrics[common_metrics.NUM_OUTPUT_TOKENS] = num_output_tokens
                 request_metrics[common_metrics.NUM_TOTAL_TOKENS] = request_metrics[common_metrics.NUM_INPUT_TOKENS] + num_output_tokens
                 if request_metrics[common_metrics.E2E_LAT] > 0:
@@ -164,10 +170,16 @@ def get_token_throughput_latencies(
     for out in outs:
         request_metrics, gen_text, _ = out
         num_output_tokens = get_token_length(gen_text)
+        latency = request_metrics[common_metrics.E2E_LAT]
+        ttft = request_metrics[common_metrics.TTFT]
         if num_output_tokens: 
             request_metrics[common_metrics.INTER_TOKEN_LAT] /= num_output_tokens
         else:
             request_metrics[common_metrics.INTER_TOKEN_LAT] = 0
+        if num_output_tokens > 1:
+            request_metrics[common_metrics.TPOT] = (latency - ttft) / (num_output_tokens - 1)
+        else:
+            request_metrics[common_metrics.TPOT] = 0
         request_metrics[common_metrics.NUM_OUTPUT_TOKENS] = num_output_tokens
         request_metrics[common_metrics.NUM_TOTAL_TOKENS] = request_metrics[common_metrics.NUM_INPUT_TOKENS] + num_output_tokens
         if request_metrics[common_metrics.E2E_LAT] > 0:
@@ -239,7 +251,8 @@ def metrics_summary(
         common_metrics.E2E_LAT,
         common_metrics.REQ_OUTPUT_THROUGHPUT,
         common_metrics.NUM_INPUT_TOKENS,
-        common_metrics.NUM_OUTPUT_TOKENS
+        common_metrics.NUM_OUTPUT_TOKENS,
+        common_metrics.TPOT,
     ]:
         print(key)
         ret[key] = {}
