@@ -62,6 +62,7 @@ class BenchmarkMetrics:
     total_input: int
     total_output: int
     request_throughput: float
+    input_throughput: float
     output_throughput: float
     total_token_throughput: float
     mean_request_throughput: float
@@ -69,18 +70,26 @@ class BenchmarkMetrics:
     median_output_throughput_per_user: float
     std_output_throughput_per_user: float
     percentiles_output_throughput_per_user: List[Tuple[float, float]]
+    min_output_throughtput: float
+    max_output_throughtput: float
     mean_ttft_ms: float
     median_ttft_ms: float
     std_ttft_ms: float
     percentiles_ttft_ms: List[Tuple[float, float]]
+    min_ttft_ms: float
+    max_ttft_ms: float
     mean_tpot_ms: float
     median_tpot_ms: float
     std_tpot_ms: float
     percentiles_tpot_ms: List[Tuple[float, float]]
+    min_tpot_ms: float
+    max_tpot_ms: float
     mean_itl_ms: float
     median_itl_ms: float
     std_itl_ms: float
     percentiles_itl_ms: List[Tuple[float, float]]
+    min_itl_ms: float
+    max_itl_ms: float
     # E2EL stands for end-to-end latency per request.
     # It is the time taken on the client side from sending
     # a request to receiving a complete response.
@@ -88,6 +97,8 @@ class BenchmarkMetrics:
     median_e2el_ms: float
     std_e2el_ms: float
     percentiles_e2el_ms: List[Tuple[float, float]]
+    min_e2el_ms: float
+    max_e2el_ms: float
 
 
 def sample_sharegpt_requests(
@@ -397,6 +408,7 @@ def calculate_metrics(
         total_input=total_input,
         total_output=sum(actual_output_lens),
         request_throughput=completed / dur_s,
+        input_throughput=total_input / dur_s,
         output_throughput=sum(actual_output_lens) / dur_s,
         total_token_throughput=(total_input + sum(actual_output_lens)) / dur_s,
         mean_request_throughput=total_request_throughput / completed if completed > 0 else 0,
@@ -406,6 +418,8 @@ def calculate_metrics(
         percentiles_output_throughput_per_user=[
             (p, np.percentile(reqs_output_throughputs or 0, p)) for p in selected_percentiles
         ],
+        min_output_throughtput=np.min(reqs_output_throughputs or [0]),
+        max_output_throughtput=np.max(reqs_output_throughputs or [0]),
         mean_ttft_ms=np.mean(ttfts or 0)
         * 1000,  # ttfts is empty if streaming is not supported by backend
         std_ttft_ms=np.std(ttfts or 0) * 1000,
@@ -413,24 +427,32 @@ def calculate_metrics(
         percentiles_ttft_ms=[
             (p, np.percentile(ttfts or 0, p) * 1000) for p in selected_percentiles
         ],
+        min_ttft_ms=np.min(ttfts or [0]) * 1000,
+        max_ttft_ms=np.max(ttfts or [0]) * 1000,
         mean_tpot_ms=np.mean(tpots or 0) * 1000,
         std_tpot_ms=np.std(tpots or 0) * 1000,
         median_tpot_ms=np.median(tpots or 0) * 1000,
         percentiles_tpot_ms=[
             (p, np.percentile(tpots or 0, p) * 1000) for p in selected_percentiles
         ],
+        min_tpot_ms=np.min(tpots or [0]) * 1000,
+        max_tpot_ms=np.max(tpots or [0]) * 1000,
         mean_itl_ms=np.mean(itls or 0) * 1000,
         std_itl_ms=np.std(itls or 0) * 1000,
         median_itl_ms=np.median(itls or 0) * 1000,
         percentiles_itl_ms=[
             (p, np.percentile(itls or 0, p) * 1000) for p in selected_percentiles
         ],
+        min_itl_ms=np.min(itls or [0]) * 1000,
+        max_itl_ms=np.max(itls or [0]) * 1000,
         mean_e2el_ms=np.median(e2els or 0) * 1000,
         std_e2el_ms=np.std(e2els or 0) * 1000,
         median_e2el_ms=np.mean(e2els or 0) * 1000,
         percentiles_e2el_ms=[
             (p, np.percentile(e2els or 0, p) * 1000) for p in selected_percentiles
         ],
+        min_e2el_ms=np.min(e2els or [0]) * 1000,
+        max_e2el_ms=np.max(e2els or [0]) * 1000,
     )
     return metrics, actual_output_lens
 
@@ -797,6 +819,7 @@ def main(args: argparse.Namespace):
     result_json["num_prompts"] = args.num_prompts
     result_json["input_tokens"] = args.random_input_len
     result_json["output_tokens"] = args.random_output_len
+    result_json["concurrency"] = args.num_of_prompts
 
     # Metadata
     if args.metadata:
@@ -1045,7 +1068,7 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url):
             self.disable_tqdm = False
             self.backend = "vllm"
             self.percentile_metrics = "ttft,tpot,itl,e2el"
-            self.metric_percentiles = "95"
+            self.metric_percentiles = "25,75,95,99"
             self.base_url = base_url
             self.endpoint = "/completions"
             self.best_of = 1
