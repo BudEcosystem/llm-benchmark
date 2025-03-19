@@ -182,8 +182,6 @@ def format_llmperf_result(result):
     # formatted_result = {}
     # formatted_result["model"] = result["model"]
     # formatted_result["concurrency"] = result["num_concurrent_requests"]
-    # formatted_result["input_tokens"] = result["mean_input_tokens"]
-    # formatted_result["output_tokens"] = result["mean_output_tokens"]
     # formatted_result["completed"] = result["results"]["num_completed_requests"]
     # formatted_result["duration"] = result["results"]["end_to_end_latency_s"]["max"]
     # formatted_result["request_throughput_per_min"] = result["results"][
@@ -209,6 +207,8 @@ def format_llmperf_result(result):
     #     result["results"]["inter_token_latency_s"]["quantiles"]["quantiles"]["p95"] * 1000
     # )
     formatted_result = benchmark_result.model_dump()
+    formatted_result["input_tokens"] = result["mean_input_tokens"]
+    formatted_result["output_tokens"] = result["mean_output_tokens"]
     formatted_result["error_messages"] = result["results"].get("error_msg", [])
     return formatted_result
 
