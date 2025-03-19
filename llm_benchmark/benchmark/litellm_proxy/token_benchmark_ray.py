@@ -265,8 +265,11 @@ def metrics_summary(
             quantiles_reformatted_keys[reformatted_key] = value
         ret[key]["quantiles"] = quantiles_reformatted_keys
         mean = series.mean()
+        median = series.median()
         print(f"    mean = {mean}")
         ret[key]["mean"] = mean
+        print(f"    median = {median}")
+        ret[key]["median"] = median
         print(f"    min = {series.min()}")
         ret[key]["min"] = series.min()
         print(f"    max = {series.max()}")
