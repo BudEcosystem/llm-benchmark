@@ -6,7 +6,7 @@ psutil
 # Benchamrk & Profiling
 torch
 requests
-llmperf @ git+https://github.com/BudEcosystem/llmperf.git
+llmperf @ git+https://github.com/BudEcosystem/llmperf.git@feature/tpot
 
 # Other
 tqdm
