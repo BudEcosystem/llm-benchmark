@@ -35,6 +35,17 @@ class DeviceInfo(Enum):
         peak_i4_TFLOPS=1248,
         inter_node_bandwidth_in_GB_per_sec=200
     )
+    NVIDIA_A100_SXM4_80GB = GPUInfo(
+        name="NVIDIA_A100_SXM4_80GB",
+        mem_per_GPU_in_GB=80,
+        hbm_bandwidth_in_GB_per_sec=1935,
+        intra_node_bandwidth_in_GB_per_sec=300,
+        intra_node_min_message_latency=8e-06,
+        peak_fp16_TFLOPS=312,
+        peak_i8_TFLOPS=624,
+        peak_i4_TFLOPS=1248,
+        inter_node_bandwidth_in_GB_per_sec=200
+    )
     HL_225 = GPUInfo(
         name="HL_225",
         mem_per_GPU_in_GB=96,

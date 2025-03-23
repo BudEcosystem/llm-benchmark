@@ -458,7 +458,7 @@ def get_gpu_info():
             gpu_info.append(
                 {
                     "device_id": device_id,
-                    "product_name": pynvml.nvmlDeviceGetName(handle).decode("utf-8").replace(" ", "_").upper(),
+                    "product_name": pynvml.nvmlDeviceGetName(handle).decode("utf-8").replace(" ", "_").replace("-", "_").upper(),
                     "product_brand": pynvml.nvmlDeviceGetBrand(handle),
                     "architecture": extract_value(
                         r"Product Architecture\s+:\s+(.+)", devices[device_id]
