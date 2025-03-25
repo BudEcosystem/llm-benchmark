@@ -503,5 +503,6 @@ def create_cuda_config():
         "peak_i8_TFLOPS": device_info.peak_i8_TFLOPS,
         "peak_i4_TFLOPS": device_info.peak_i4_TFLOPS,
         "inter_node_bandwidth_in_GB_per_sec": device_info.inter_node_bandwidth_in_GB_per_sec,
+        "available_count": len(dev_info)
     }
     return device_config, dev_info
