@@ -20,9 +20,9 @@ from llmperf.models import RequestConfig
 from llmperf.requests_launcher import RequestsLauncher
 
 from .utils import (
-    randomly_sample_sonnet_lines_prompt,
     LLMPerfResults,
-    sample_random_positive_int,
+    sample_requests,
+    transform_sampled_requests,
 )
 
 from tqdm import tqdm
@@ -43,6 +43,7 @@ def get_token_throughput_latencies(
     max_num_completed_requests: int = 500,
     test_timeout_s=90,
     llm_api="openai",
+    sampled_prompts: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """Get the token throughput and latencies for the given model.
 
@@ -79,20 +80,17 @@ def get_token_throughput_latencies(
     completed_requests = []
     num_completed_requests = 0
     # make up prompts outside of send loop for faster benchmarking loop
-    num_output_tokens_list = []
-    prompts = []
-    for i in range(max_num_completed_requests):
-        num_output_tokens = (sample_random_positive_int(
-            mean_output_tokens, stddev_output_tokens
-        ))
-        num_output_tokens_list.append(num_output_tokens)
-
-        prompts.append(randomly_sample_sonnet_lines_prompt(
-            prompt_tokens_mean=mean_input_tokens,
-            prompt_tokens_stddev=stddev_input_tokens,
-            expect_output_tokens=num_output_tokens,
-            tokenizer=tokenizer
-        ))
+    if sampled_prompts:
+        prompts, num_output_tokens_list = transform_sampled_requests(sampled_prompts, tokenizer)
+    else:
+        prompts, num_output_tokens_list = sample_requests(
+            max_num_completed_requests,
+            mean_input_tokens,
+            stddev_input_tokens,
+            mean_output_tokens,
+            stddev_output_tokens,
+            tokenizer,
+        )
     start_time = time.monotonic()
     iter = 0
     pbar = tqdm(total=max_num_completed_requests)
@@ -299,7 +297,7 @@ def run_token_benchmark(
     user_metadata: Dict[str, Any] = {},
     llm_api: str = 'openai',
     test_timeout_s: int = 600,
-    
+    sampled_prompts: Optional[list[Dict[str, Any]]] = None,
 ):
     """
     Args:
@@ -335,6 +333,7 @@ def run_token_benchmark(
         stddev_output_tokens=stddev_output_tokens,
         num_concurrent_requests=num_concurrent_requests,
         additional_sampling_params=json.loads(additional_sampling_params),
+        sampled_prompts=sampled_prompts,
     )
 
     if results_dir:

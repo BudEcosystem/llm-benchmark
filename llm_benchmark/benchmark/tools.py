@@ -14,6 +14,7 @@ from llm_benchmark.benchmark.litellm_proxy.token_benchmark_ray import (
 )
 from llm_benchmark.profiler.constants import VllmProfileLayer
 from llm_benchmark.profiler.record_function_tracer import RecordFunctionTracer
+from llm_benchmark.utils.common import combine_multiple_datasets
 
 from .schemas import BenchmarkResultSchema
 
@@ -277,6 +278,7 @@ def run_benchmark(
     run_id: str = None,
     env_values: Optional[dict] = None,
     latency_factors: Optional[dict] = None,
+    datasets: Optional[list] = None,
 ):
     # Set environment variables directly
     # TODO: Removed it because litellm_proxy requires actual api key
@@ -284,6 +286,8 @@ def run_benchmark(
     # If required to set for other engines, can be set as env
     # os.environ["OPENAI_API_KEY"] = "secret_abcdefg"
     # os.environ["OPENAI_API_BASE"] = base_url
+    
+    sampled_prompts = combine_multiple_datasets(datasets, concurrency)
 
     if result_dir is not None:
         result_dir = os.path.join(result_dir, model.replace("/", "--"))
@@ -308,12 +312,12 @@ def run_benchmark(
 
     if benchmark_script == "vllm":
         result_output = vllm_run_benchmark(
-            model, input_token, output_token, concurrency, base_url
+            model, input_token, output_token, concurrency, base_url, sampled_prompts
         )
         result_output = format_vllm_result(result_output)
     elif benchmark_script == "llmperf":
         result_output = llmperf_run_benchmark(
-            model, concurrency, concurrency, input_token, 0, output_token, 0
+            model, concurrency, concurrency, input_token, 0, output_token, 0, sampled_prompts=sampled_prompts
         )
         result_output = format_llmperf_result(result_output)
     elif benchmark_script == "litellm_proxy":
@@ -325,11 +329,9 @@ def run_benchmark(
             "litellm_proxy_url": base_url,
             "litellm_master_key": litellm_master_key
         }
-        print(f"Request metadata for litellm benchmark : {request_metadata}")
         result_output = litellm_run_benchmark(
-            model, concurrency, concurrency, input_token, 0, output_token, 0, llm_api="mock_litellm_proxy", request_metadata=request_metadata, latency_factors=latency_factors
+            model, concurrency, concurrency, input_token, 0, output_token, 0, llm_api="mock_litellm_proxy", request_metadata=request_metadata, latency_factors=latency_factors, sampled_prompts=sampled_prompts
         )
-        print(f"Result output for litellm benchmark : {result_output}")
         result_output = format_llmperf_result(result_output)
 
     profiler_stats = {}

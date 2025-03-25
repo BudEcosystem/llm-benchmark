@@ -336,6 +336,18 @@ def sample_random_requests(
     return input_requests   
 
 
+def transform_sampled_prompts(sampled_prompts: List[dict], tokenizer: PreTrainedTokenizerBase, fixed_output_len: Optional[int]=100) -> List[Tuple[str, int, int]]:
+    filtered_prompts = []
+    random.shuffle(sampled_prompts)
+    for each in sampled_prompts:
+        prompt = each["prompt"]
+        completion = each["response"]
+        prompt_token_ids = tokenizer(prompt).input_ids
+        prompt_len = len(prompt_token_ids)
+        completion_token_ids = tokenizer(completion).input_ids
+        output_len = len(completion_token_ids) if fixed_output_len is None else fixed_output_len
+        filtered_prompts.append((prompt, prompt_len, output_len))
+    return filtered_prompts
 
 async def get_request(
     input_requests: List[Tuple[str, int, int]],
@@ -688,6 +700,7 @@ def main(args: argparse.Namespace):
     backend = args.backend
     model_id = args.model
     tokenizer_id = args.tokenizer if args.tokenizer is not None else args.model
+    sampled_prompts = args.sampled_prompts
 
     if args.base_url is not None:
         api_url = f"{args.base_url}{args.endpoint}"
@@ -698,7 +711,14 @@ def main(args: argparse.Namespace):
 
     tokenizer = get_tokenizer(tokenizer_id, trust_remote_code=args.trust_remote_code)
 
-    if args.dataset is not None:
+    if sampled_prompts:
+        input_requests = transform_sampled_prompts(
+            sampled_prompts,
+            tokenizer,
+            fixed_output_len=args.mean_output_len
+        )
+
+    elif args.dataset is not None:
         warnings.warn(
             "The '--dataset' argument will be deprecated in the next "
             "release. Please use '--dataset-name' and "
@@ -1052,15 +1072,21 @@ def get_args():
         'Use "--percentile-metrics" to select metrics.',
     )
 
+    parser.add_argument(
+        "--sampled-prompts",
+        type=json.loads,  # Convert JSON string to Python list of dicts
+        default=[],
+        help="Provide a list of sampled prompts as JSON string (Example: '[{\"id\": 1, \"prompt\": \"Q1\", \"response\": \"A1\"}]')"
+    )
     args = parser.parse_args()
 
     return args
 
 
-def run_benchmark(model, input_len, output_len, num_prompts, base_url):
+def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[list] = None):
     # args = get_args()
     class BenchmarkArgs:
-        def __init__(self, model, input_len, output_len, num_prompts, base_url):
+        def __init__(self, model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[list] = None):
             self.model = model
             self.tokenizer = model
             self.num_prompts = num_prompts
@@ -1094,8 +1120,9 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url):
             self.metadata = None
             self.result_dir = "./results"
             self.result_filename = None
+            self.sampled_prompts = sampled_prompts
 
-    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url)
+    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url, sampled_prompts)
 
     return main(args)
 

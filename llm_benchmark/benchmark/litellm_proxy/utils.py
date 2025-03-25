@@ -187,3 +187,40 @@ def compute_latency_factors(model: str, request_metadata: Dict[str, Any], llm_ap
 
 def calculate_mock_delay(num_input_tokens, num_output_tokens, latency_factors):
     return latency_factors["T_base"] + latency_factors["T_input"] * num_input_tokens + latency_factors["T_output"] * num_output_tokens
+
+
+def sample_requests(
+    concurrent_requests,
+    mean_input_tokens,
+    stddev_input_tokens,
+    mean_output_tokens,
+    stddev_output_tokens,
+    tokenizer,
+):
+    num_output_tokens_list = []
+    prompts = []
+    for i in range(concurrent_requests):
+        num_output_tokens = (sample_random_positive_int(
+            mean_output_tokens, stddev_output_tokens
+        ))
+        num_output_tokens_list.append(num_output_tokens)
+
+        prompts.append(randomly_sample_sonnet_lines_prompt(
+            prompt_tokens_mean=mean_input_tokens,
+            prompt_tokens_stddev=stddev_input_tokens,
+            expect_output_tokens=num_output_tokens,
+            tokenizer=tokenizer
+        ))
+    return prompts, num_output_tokens_list
+
+
+def transform_sampled_requests(prompts: list[dict], tokenizer) -> list[Tuple[str, int]]:
+    get_token_length = lambda text: len(tokenizer.encode(text))
+    sampled_requests = []
+    num_output_token_list = []
+    for each in prompts:
+        prompt = each["prompt"]
+        sampled_requests.append((prompt, get_token_length(prompt)))
+        num_output_token_list.append(get_token_length(each["response"]))
+    return sampled_requests, num_output_token_list
+
