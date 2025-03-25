@@ -25,7 +25,7 @@ def get_profiler_result(result_dir: str):
     return profile_stats
 
 
-def create_summary(results, results_dir):
+def create_summary(results, results_dir, profiler_result: bool = False):
     summary_list = []
     layers = VllmProfileLayer.get_available_profile_names()
 
@@ -57,9 +57,10 @@ def create_summary(results, results_dir):
         summary["Mean Inter Token Latency (ms)"] = round(result["mean_itl_ms"], 2)
         summary["P95 Inter Token Latency (ms)"] = round(result["p95_itl_ms"], 2)
 
-        for layer in layers:
-            for prefix in ("cpu.", "cuda."):
-                name = prefix + layer
+        if profiler_result:
+            for layer in layers:
+                for prefix in ("cpu.", "cuda."):
+                    name = prefix + layer
                 summary[f"{name}_min"] = result[name]["min"] if name in result else ""
                 summary[f"{name}_max"] = result[name]["max"] if name in result else ""
                 summary[f"{name}_mean"] = result[name]["mean"] if name in result else ""
@@ -276,6 +277,7 @@ def run_benchmark(
     benchmark_script: str,
     result_dir: str = None,
     run_id: str = None,
+    profiler_result: bool = False,
     env_values: Optional[dict] = None,
     latency_factors: Optional[dict] = None,
     datasets: Optional[list] = None,
@@ -335,8 +337,9 @@ def run_benchmark(
         result_output = format_llmperf_result(result_output)
 
     profiler_stats = {}
-    if result_dir is not None:
-        profiler_stats = get_profiler_result(result_dir)
+    if profiler_result:
+        if result_dir is not None:
+            profiler_stats = get_profiler_result(result_dir)
 
     # run_id_dir = os.path.join(result_dir, 'traces', run_id)
     # os.makedirs(run_id_dir, exist_ok=True)

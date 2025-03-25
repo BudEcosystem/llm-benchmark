@@ -459,7 +459,7 @@ def calculate_metrics(
         max_itl_ms=np.max(itls or [0]) * 1000,
         mean_e2el_ms=np.median(e2els or 0) * 1000,
         std_e2el_ms=np.std(e2els or 0) * 1000,
-        median_e2el_ms=np.mean(e2els or 0) * 1000,
+        median_e2el_ms=np.median(e2els or 0) * 1000,
         percentiles_e2el_ms=[
             (p, np.percentile(e2els or 0, p) * 1000) for p in selected_percentiles
         ],

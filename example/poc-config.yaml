@@ -1,0 +1,52 @@
+args:
+  model: 
+    - mistralai/Mistral-7B-Instruct-v0.3
+    - meta-llama/Llama-3.1-8B-Instruct
+    # - microsoft/Phi-3-mini-4k-instruct
+  port: 8000
+  tensor-parallel-size:
+    - 1
+    # - 2
+    # - 4
+  # max-model-len: 8192
+  enable-prefix-caching: true
+  disable-sliding-window: true
+
+
+envs:
+  CPU_KVCACHE_SPACE: 20
+  # CPU_OMP_THREADS_BIND: '0-13'
+
+run_config:
+  token_pairs:
+    - 50,200
+    - 100,150
+    - 150,100
+    - 200,50
+    - 100,400
+    - 200,300
+    - 300,200
+    - 400,100
+    - 200,800
+    - 400,600
+    - 600,400
+    - 800,200
+    - 400,1600
+    - 800,1200
+    - 1200,800
+    - 1600,400
+    - 1800,200
+    - 800,3200
+    - 1600,2400
+    - 2400,1600
+    - 3200,800
+    - 3600,400
+  num_concurrent_requests: 
+    - 1
+    - 8
+    - 16
+    - 32
+    - 64
+    - 128
+    - 256
+    # - 20

@@ -458,7 +458,7 @@ def get_gpu_info():
             gpu_info.append(
                 {
                     "device_id": device_id,
-                    "product_name": pynvml.nvmlDeviceGetName(handle).decode("utf-8").replace(" ", "_").upper(),
+                    "product_name": pynvml.nvmlDeviceGetName(handle).decode("utf-8").replace(" ", "_").replace("-", "_").upper(),
                     "product_brand": pynvml.nvmlDeviceGetBrand(handle),
                     "architecture": extract_value(
                         r"Product Architecture\s+:\s+(.+)", devices[device_id]
@@ -490,7 +490,7 @@ def create_cuda_config():
 
     dev_info, _ = get_gpu_info()
     print(dev_info[0])
-    print(dev_info[0]['product_name'])
+    print(dev_info[0]['product_name'])  
     
     device_info = DeviceInfo[dev_info[0]['product_name']].value
     device_config = {
@@ -504,4 +504,4 @@ def create_cuda_config():
         "peak_i4_TFLOPS": device_info.peak_i4_TFLOPS,
         "inter_node_bandwidth_in_GB_per_sec": device_info.inter_node_bandwidth_in_GB_per_sec,
     }
-    return device_config
+    return device_config, dev_info

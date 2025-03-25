@@ -2,6 +2,7 @@ import os
 import yaml
 import uuid
 import json
+import time
 import hashlib
 import argparse
 import threading
@@ -25,6 +26,24 @@ from llm_benchmark.benchmark.litellm_proxy.utils import compute_latency_factors
 
 def create_config(run_config):
     configs = []
+    concurrencies = (
+        [int(x) for x in run_config["num_concurrent_requests"]]
+        if isinstance(run_config["num_concurrent_requests"], list)
+        else [run_config["num_concurrent_requests"]]
+    )
+
+    if "token_pairs" in run_config:
+        for token_pair in run_config["token_pairs"]:
+            input_token, output_token = map(int, token_pair.split(","))
+            for concurrency in concurrencies:
+                config = {
+                    "input_tokens": input_token,
+                    "output_tokens": output_token,
+                    "concurrency": concurrency,
+                }
+                configs.append(config)
+        return configs
+    
     input_tokens = (
         [int(x) for x in run_config["mean_input_tokens"]]
         if isinstance(run_config["mean_input_tokens"], list)
@@ -35,11 +54,7 @@ def create_config(run_config):
         if isinstance(run_config["mean_output_tokens"], list)
         else [run_config["mean_output_tokens"]]
     )
-    concurrencies = (
-        [int(x) for x in run_config["num_concurrent_requests"]]
-        if isinstance(run_config["num_concurrent_requests"], list)
-        else [run_config["num_concurrent_requests"]]
-    )
+    
 
     for input_token in input_tokens:
         if input_token < 20:
@@ -200,12 +215,13 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
         container_id = None
 
     if args.engine_config_id or container_id:
-        try:
-            engine_tools.create_engine_summary(args.engine, engine_config_id, model)
-        except Exception as e:
-            print(f"Error during {engine_config_id} summary creation: {e}")
-            checkpoint[engine_config_hash]["status"] = "engine_summary_failed"
-            return checkpoint
+        if args.collect_engine_config:
+            try:
+                engine_tools.create_engine_summary(args.engine, engine_config_id, model)
+            except Exception as e:
+                print(f"Error during {engine_config_id} summary creation: {e}")
+                checkpoint[engine_config_hash]["status"] = "engine_summary_failed"
+                return checkpoint
 
     try:
         latency_factors = None
@@ -217,6 +233,9 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
         if container_id:
             single_node_controller.remove_container(container_id)
         checkpoint[engine_config_hash]["status"] = "warmup_failed"
+        if container_id:
+            single_node_controller.remove_container(container_id)
+
         return checkpoint
 
     log_metrics_task = None
@@ -309,11 +328,10 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
                     tp_size=engine_config["args"].get("tensor-parallel-size", 1),
                     output_dir=os.environ["PROFILER_RESULT_DIR"],
                     run_id=run_id,
+                    log_level="ERROR",
                 )
 
             results.append(result)
-
-            import time
 
             time.sleep(1)
 
@@ -321,8 +339,8 @@ def run_benchmark(args, engine_config, run_config, checkpoint=None):
             log_metrics_task.join()
             log_metrics_task = None
             stop_event = None
-
-            benchmark_tools.create_summary([result], os.environ["PROFILER_RESULT_DIR"])
+            
+            benchmark_tools.create_summary([result], os.environ["PROFILER_RESULT_DIR"], profiler_result=args.profile_model)
             print(result)
             checkpoint[engine_config_hash]["runs"][run_config_hash]["status"] = (
                 "success"
@@ -402,8 +420,8 @@ if __name__ == "__main__":
     args.add_argument(
         "--engine",
         type=str,
-        default="vllm",
-        choices=["vllm", "sglang", "litellm_proxy"],
+        default="bud",
+        choices=["vllm", "sglang", "bud", "litellm_proxy"],
         help="The engine to be used for the testing.",
     )
     args.add_argument(
@@ -429,7 +447,11 @@ if __name__ == "__main__":
         default="llmperf",
         help="The benchmark script to be used for the testing.",
     )
-
+    args.add_argument(
+        "--collect-engine-config",
+        action="store_true",
+        help="The collect engine config to be used for the testing.",
+    )
     args.add_argument(
         "--profile-collectives",
         action="store_true",
