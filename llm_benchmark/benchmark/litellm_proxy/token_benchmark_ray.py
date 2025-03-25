@@ -97,14 +97,10 @@ def get_token_throughput_latencies(
     start_time = time.monotonic()
     iter = 0
     pbar = tqdm(total=max_num_completed_requests)
-    print("Starting while loop")
-    print(time.monotonic() - start_time < test_timeout_s
-        and len(completed_requests) < max_num_completed_requests)
     while (
         time.monotonic() - start_time < test_timeout_s
         and len(completed_requests) < max_num_completed_requests
     ):
-        print("Inside while loop")
         iter += 1
         prompt = prompts.pop()
         num_input_tokens = prompt[-1]
@@ -118,9 +114,7 @@ def get_token_throughput_latencies(
             llm_api=llm_api,
         )
         request_config.metadata = request_metadata
-        print(f"Request config : {request_config}")
         if latency_factors:
-            print(f"Latency factors in get_token_throughput_latencies : {latency_factors}")
             request_config.metadata["api_key"] = "fake-api-key"
             request_config.metadata["mock_delay"] = calculate_mock_delay(num_input_tokens, num_output_tokens, latency_factors)
         req_launcher.launch_requests(request_config)
