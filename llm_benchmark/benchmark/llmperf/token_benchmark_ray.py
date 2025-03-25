@@ -20,9 +20,9 @@ from llmperf.models import RequestConfig
 from llmperf.requests_launcher import RequestsLauncher
 
 from .utils import (
-    randomly_sample_sonnet_lines_prompt,
     LLMPerfResults,
-    sample_random_positive_int,
+    sample_requests,
+    transform_sampled_requests,
 )
 
 from tqdm import tqdm
@@ -43,6 +43,7 @@ def get_token_throughput_latencies(
     max_num_completed_requests: int = 500,
     test_timeout_s=90,
     llm_api="openai",
+    sampled_prompts: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """Get the token throughput and latencies for the given model.
 
@@ -79,20 +80,17 @@ def get_token_throughput_latencies(
     completed_requests = []
     num_completed_requests = 0
     # make up prompts outside of send loop for faster benchmarking loop
-    num_output_tokens_list = []
-    prompts = []
-    for i in range(max_num_completed_requests):
-        num_output_tokens = (sample_random_positive_int(
-            mean_output_tokens, stddev_output_tokens
-        ))
-        num_output_tokens_list.append(num_output_tokens)
-
-        prompts.append(randomly_sample_sonnet_lines_prompt(
-            prompt_tokens_mean=mean_input_tokens,
-            prompt_tokens_stddev=stddev_input_tokens,
-            expect_output_tokens=num_output_tokens,
-            tokenizer=tokenizer
-        ))
+    if sampled_prompts:
+        prompts, num_output_tokens_list = transform_sampled_requests(sampled_prompts, tokenizer)
+    else:
+        prompts, num_output_tokens_list = sample_requests(
+            max_num_completed_requests,
+            mean_input_tokens,
+            stddev_input_tokens,
+            mean_output_tokens,
+            stddev_output_tokens,
+            tokenizer,
+        )
     start_time = time.monotonic()
     iter = 0
     pbar = tqdm(total=max_num_completed_requests)
@@ -120,10 +118,16 @@ def get_token_throughput_latencies(
             for out in outs:
                 request_metrics, gen_text, _ = out
                 num_output_tokens = get_token_length(gen_text)
+                latency = request_metrics[common_metrics.E2E_LAT]
+                ttft = request_metrics[common_metrics.TTFT]
                 if num_output_tokens: 
                     request_metrics[common_metrics.INTER_TOKEN_LAT] /= num_output_tokens
                 else:
                     request_metrics[common_metrics.INTER_TOKEN_LAT] = 0
+                if num_output_tokens > 1:
+                    request_metrics[common_metrics.TPOT] = (latency - ttft) / (num_output_tokens - 1)
+                else:
+                    request_metrics[common_metrics.TPOT] = 0
                 request_metrics[common_metrics.NUM_OUTPUT_TOKENS] = num_output_tokens
                 request_metrics[common_metrics.NUM_TOTAL_TOKENS] = request_metrics[common_metrics.NUM_INPUT_TOKENS] + num_output_tokens
                 request_metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = num_output_tokens / request_metrics[common_metrics.E2E_LAT]
@@ -143,10 +147,16 @@ def get_token_throughput_latencies(
     for out in outs:
         request_metrics, gen_text, _ = out
         num_output_tokens = get_token_length(gen_text)
+        latency = request_metrics[common_metrics.E2E_LAT]
+        ttft = request_metrics[common_metrics.TTFT]
         if num_output_tokens: 
             request_metrics[common_metrics.INTER_TOKEN_LAT] /= num_output_tokens
         else:
             request_metrics[common_metrics.INTER_TOKEN_LAT] = 0
+        if num_output_tokens > 1:
+            request_metrics[common_metrics.TPOT] = (latency - ttft) / (num_output_tokens - 1)
+        else:
+            request_metrics[common_metrics.TPOT] = 0
         request_metrics[common_metrics.NUM_OUTPUT_TOKENS] = num_output_tokens
         request_metrics[common_metrics.NUM_TOTAL_TOKENS] = request_metrics[common_metrics.NUM_INPUT_TOKENS] + num_output_tokens
         request_metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = num_output_tokens / request_metrics[common_metrics.E2E_LAT]
@@ -214,7 +224,8 @@ def metrics_summary(
         common_metrics.E2E_LAT,
         common_metrics.REQ_OUTPUT_THROUGHPUT,
         common_metrics.NUM_INPUT_TOKENS,
-        common_metrics.NUM_OUTPUT_TOKENS
+        common_metrics.NUM_OUTPUT_TOKENS,
+        common_metrics.TPOT,
     ]:
         print(key)
         ret[key] = {}
@@ -227,8 +238,11 @@ def metrics_summary(
             quantiles_reformatted_keys[reformatted_key] = value
         ret[key]["quantiles"] = quantiles_reformatted_keys
         mean = series.mean()
+        median = series.median()
         print(f"    mean = {mean}")
         ret[key]["mean"] = mean
+        print(f"    median = {median}")
+        ret[key]["median"] = median
         print(f"    min = {series.min()}")
         ret[key]["min"] = series.min()
         print(f"    max = {series.max()}")
@@ -283,7 +297,7 @@ def run_token_benchmark(
     user_metadata: Dict[str, Any] = {},
     llm_api: str = 'openai',
     test_timeout_s: int = 600,
-    
+    sampled_prompts: Optional[list[Dict[str, Any]]] = None,
 ):
     """
     Args:
@@ -319,6 +333,7 @@ def run_token_benchmark(
         stddev_output_tokens=stddev_output_tokens,
         num_concurrent_requests=num_concurrent_requests,
         additional_sampling_params=json.loads(additional_sampling_params),
+        sampled_prompts=sampled_prompts,
     )
 
     if results_dir:
