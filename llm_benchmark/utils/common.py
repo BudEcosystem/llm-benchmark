@@ -204,7 +204,7 @@ def get_formatted_samples_from_dataset(data: list, dataset, dataset_sample_size:
 
 def combine_multiple_datasets(
     concurrency: int,
-    seed: int,
+    seed: Optional[int] = None,
     datasets: Optional[list] = None,
     ) -> Optional[dict]:
     """

@@ -281,7 +281,7 @@ def run_benchmark(
     env_values: Optional[dict] = None,
     latency_factors: Optional[dict] = None,
     datasets: Optional[list] = None,
-    seed: Optional[int] = 55,
+    seed: Optional[int] = None,
 ):
     # Set environment variables directly
     # TODO: Removed it because litellm_proxy requires actual api key

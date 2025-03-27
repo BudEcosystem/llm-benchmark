@@ -33,7 +33,8 @@ class RequestFuncOutput:
     generated_text: str = ""
     success: bool = False
     latency: float = 0.0
-    ttft: float = 0.0  # Time to first token
+    ttft: float = 0.0 # Time to first token
+    tpot: float = 0.0
     itl: List[float] = field(
         default_factory=list)  # List of inter-token latencies
     prompt_len: int = 0
@@ -303,6 +304,7 @@ async def async_request_openai_completions(
                     output.generated_text = generated_text
                     output.success = True
                     output.latency = latency
+                    output.tpot = (latency - ttft) / (token_count - 1)
                     output.req_output_throughput = token_count/latency
                 else:
                     output.error = response.reason or ""
