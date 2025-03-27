@@ -135,17 +135,16 @@ def distribute_samples_evenly(datasets, concurrency):
 
 
 def handle_hf_datasets(dataset, seed, dataset_sample_size=None):
-    random.seed(seed)
     data = load_dataset(dataset.hf_hub_url, split=dataset.split or "train")
-
-    data_samples = get_formatted_samples_from_dataset(data, dataset, dataset_sample_size, seed)
+    shuffled_data = data.shuffle(seed=seed)
+    data_samples = get_formatted_samples_from_dataset(shuffled_data, dataset, dataset_sample_size)
     return data_samples
 
 def handle_modelscope_datasets(dataset, seed, dataset_sample_size=None):
-    random.seed(seed)
-    data = MsDataset.load(dataset.ms_hub_url, split=dataset.split or 'train')
-
-    data_samples = get_formatted_samples_from_dataset(data, dataset, dataset_sample_size, seed)
+    data = MsDataset.load(dataset.ms_hub_url, split=dataset.split or 'train', subset_name=dataset.subset)
+    hf_dataset = data.to_hf_dataset()
+    shuffled_data = hf_dataset.shuffle(seed=seed)
+    data_samples = get_formatted_samples_from_dataset(shuffled_data, dataset, dataset_sample_size)
     return data_samples
     
 
@@ -159,7 +158,8 @@ def handle_local_datasets(dataset, seed, is_folder=False, dataset_sample_size=No
         with open(dataset_path, 'r') as f:
             data = json.load(f)
             if isinstance(data, list) and len(data) > 0:
-                data_samples = get_formatted_samples_from_dataset(data, dataset, dataset_sample_size, seed)
+                random.shuffle(data)
+                data_samples = get_formatted_samples_from_dataset(data, dataset, dataset_sample_size)
                 dataset_samples.extend(data_samples)
                 if len(dataset_samples) < dataset_sample_size:
                     dataset_sample_size = dataset_sample_size - len(dataset_samples)
@@ -169,10 +169,7 @@ def handle_local_datasets(dataset, seed, is_folder=False, dataset_sample_size=No
                 raise TypeError("Invalid data format: expected list of dicts.")
                 
 
-def get_formatted_samples_from_dataset(data: list, dataset, dataset_sample_size: int, seed: int):
-    random.seed(seed)
-    random.shuffle(data)
-    
+def get_formatted_samples_from_dataset(data: list, dataset, dataset_sample_size: int):
     default_column_mapping = {"prompt": "instruction", "query": "input", "response": "output", "chosen": None, "messages": "conversations"}
     dataset_column_mapping = dataset.columns or {}
     default_tags_mapping = {"role_tag": "from", "content_tag": "value", "user_tag": "human", "assistant_tag": "gpt"}
