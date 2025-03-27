@@ -44,7 +44,7 @@ def get_token_throughput_latencies(
     llm_api="litellm_proxy",
     request_metadata: Optional[Dict[str, Any]] = None,
     latency_factors: Optional[Dict[str, float]] = None,
-    sampled_prompts: Optional[List[str]] = None,
+    sampled_prompts: Optional[dict] = None,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """Get the token throughput and latencies for the given model.
 
@@ -319,7 +319,7 @@ def run_token_benchmark(
     test_timeout_s: int = 600,
     request_metadata: Optional[Dict[str, Any]] = None,
     latency_factors: Optional[Dict[str, float]] = None,
-    sampled_prompts: Optional[list[Dict[str, Any]]] = None,
+    sampled_prompts: Optional[dict] = None,
 ):
     """
     Args:

@@ -281,6 +281,7 @@ def run_benchmark(
     env_values: Optional[dict] = None,
     latency_factors: Optional[dict] = None,
     datasets: Optional[list] = None,
+    seed: Optional[int] = 55,
 ):
     # Set environment variables directly
     # TODO: Removed it because litellm_proxy requires actual api key
@@ -289,7 +290,11 @@ def run_benchmark(
     # os.environ["OPENAI_API_KEY"] = "secret_abcdefg"
     # os.environ["OPENAI_API_BASE"] = base_url
     
-    sampled_prompts = combine_multiple_datasets(datasets, concurrency)
+    sampled_prompts = combine_multiple_datasets(
+        concurrency,
+        seed,
+        datasets,
+    )
 
     if result_dir is not None:
         result_dir = os.path.join(result_dir, model.replace("/", "--"))
@@ -314,7 +319,7 @@ def run_benchmark(
 
     if benchmark_script == "vllm":
         result_output = vllm_run_benchmark(
-            model, input_token, output_token, concurrency, base_url, sampled_prompts
+            model, input_token, output_token, concurrency, base_url, sampled_prompts=sampled_prompts
         )
         result_output = format_vllm_result(result_output)
     elif benchmark_script == "llmperf":

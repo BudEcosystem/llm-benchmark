@@ -5,6 +5,7 @@ import time
 import traceback
 from dataclasses import dataclass, field
 from typing import List, Optional, Union
+from uuid import UUID
 
 import aiohttp
 import huggingface_hub.constants
@@ -24,6 +25,7 @@ class RequestFuncInput:
     model: str
     best_of: int = 1
     use_beam_search: bool = False
+    dataset_id: Optional[UUID] = None
 
 
 @dataclass
@@ -37,6 +39,8 @@ class RequestFuncOutput:
     prompt_len: int = 0
     error: str = ""
     req_output_throughput : float = 0.0
+    dataset_id: Optional[UUID] = None
+    output_len: Optional[int] = 0
 
 
 async def async_request_tgi(
@@ -254,6 +258,7 @@ async def async_request_openai_completions(
 
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
+        output.dataset_id = request_func_input.dataset_id
 
         token_count = 0
         generated_text = ""
@@ -433,6 +438,7 @@ async def async_request_api_chat_completions(
 
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
+        output.dataset_id = request_func_input.dataset_id
 
         generated_text = ""
         ttft = 0.0

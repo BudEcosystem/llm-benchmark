@@ -331,22 +331,23 @@ def sample_random_requests(
         prompt = tokenizer.decode(
             [(offsets[i] + i + j) % tokenizer.vocab_size for j in range(input_lens[i])]
         )
-        input_requests.append((prompt, int(input_lens[i]), int(output_lens[i])))
+        input_requests.append((prompt, int(input_lens[i]), int(output_lens[i], None)))
 
-    return input_requests   
+    return input_requests
 
 
-def transform_sampled_prompts(sampled_prompts: List[dict], tokenizer: PreTrainedTokenizerBase, fixed_output_len: Optional[int]=100) -> List[Tuple[str, int, int]]:
+def transform_sampled_prompts(sampled_prompts: dict, tokenizer: PreTrainedTokenizerBase, fixed_output_len: Optional[int]=100) -> List[Tuple[str, int, int]]:
     filtered_prompts = []
-    random.shuffle(sampled_prompts)
-    for each in sampled_prompts:
-        prompt = each["prompt"]
-        completion = each["response"]
-        prompt_token_ids = tokenizer(prompt).input_ids
-        prompt_len = len(prompt_token_ids)
-        completion_token_ids = tokenizer(completion).input_ids
-        output_len = len(completion_token_ids) if fixed_output_len is None else fixed_output_len
-        filtered_prompts.append((prompt, prompt_len, output_len))
+    for dataset_id, value in sampled_prompts.items():
+        random.shuffle(value)
+        for each in value:
+            prompt = each["prompt"]
+            completion = each["response"]
+            prompt_token_ids = tokenizer(prompt).input_ids
+            prompt_len = len(prompt_token_ids)
+            completion_token_ids = tokenizer(completion).input_ids
+            output_len = len(completion_token_ids) if fixed_output_len is None else fixed_output_len
+            filtered_prompts.append((prompt, prompt_len, output_len, dataset_id))
     return filtered_prompts
 
 async def get_request(
@@ -394,6 +395,7 @@ def calculate_metrics(
                 tokenizer(outputs[i].generated_text, add_special_tokens=False).input_ids
             )
             actual_output_lens.append(output_len)
+            outputs[i].output_len = output_len
             total_input += input_requests[i][1]
             if output_len > 1:
                 tpots.append((outputs[i].latency - outputs[i].ttft) / (output_len - 1))
@@ -466,7 +468,7 @@ def calculate_metrics(
         min_e2el_ms=np.min(e2els or [0]) * 1000,
         max_e2el_ms=np.max(e2els or [0]) * 1000,
     )
-    return metrics, actual_output_lens
+    return metrics, outputs
 
 
 async def benchmark(
@@ -531,7 +533,7 @@ async def benchmark(
     benchmark_start_time = time.perf_counter()
     tasks: List[asyncio.Task] = []
     async for request in get_request(input_requests, request_rate):
-        prompt, prompt_len, output_len = request
+        prompt, prompt_len, output_len, dataset_id = request
         request_func_input = RequestFuncInput(
             model=model_id,
             prompt=prompt,
@@ -540,6 +542,7 @@ async def benchmark(
             output_len=output_len,
             best_of=best_of,
             use_beam_search=use_beam_search,
+            dataset_id=dataset_id,
         )
         tasks.append(
             asyncio.create_task(
@@ -568,7 +571,7 @@ async def benchmark(
 
     benchmark_duration = time.perf_counter() - benchmark_start_time
 
-    metrics, actual_output_lens = calculate_metrics(
+    metrics, outputs = calculate_metrics(
         input_requests=input_requests,
         outputs=outputs,
         dur_s=benchmark_duration,
@@ -607,7 +610,7 @@ async def benchmark(
         "output_throughput_per_user":[output.req_output_throughput for output in outputs],
         # "total_token_throughput": metrics.total_token_throughput,
         "input_lens": [output.prompt_len for output in outputs],
-        "output_lens": actual_output_lens,
+        "output_lens": [output.output_len for output in outputs],
         "e2els":[ output.latency for output in outputs],
         "ttfts": [output.ttft for output in outputs],
         "itls": [output.itl for output in outputs],
@@ -1083,10 +1086,10 @@ def get_args():
     return args
 
 
-def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[list] = None):
+def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[dict] = None):
     # args = get_args()
     class BenchmarkArgs:
-        def __init__(self, model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[list] = None):
+        def __init__(self, model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[dict] = None):
             self.model = model
             self.tokenizer = model
             self.num_prompts = num_prompts

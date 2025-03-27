@@ -16,3 +16,4 @@ transformers
 pandas
 datasets
 pyarrow
+modelscope

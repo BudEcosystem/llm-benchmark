@@ -141,7 +141,7 @@ class MockLiteLLMChatCompletionsClient(LLMClient):
             raise ValueError("the provider api_key must be set.")
 
         prompt = request_config.prompt
-        prompt, prompt_len = prompt
+        prompt, prompt_len, dataset_id = prompt
 
         message = [
             {"role": "system", "content": ""},
@@ -190,6 +190,7 @@ class MockLiteLLMChatCompletionsClient(LLMClient):
         total_request_time = 0
 
         metrics = {}
+        metrics["dataset_id"] = dataset_id
 
         metrics[common_metrics.ERROR_CODE] = None
         metrics[common_metrics.ERROR_MSG] = ""

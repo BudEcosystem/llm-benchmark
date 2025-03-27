@@ -43,7 +43,7 @@ def get_token_throughput_latencies(
     max_num_completed_requests: int = 500,
     test_timeout_s=90,
     llm_api="openai",
-    sampled_prompts: Optional[List[str]] = None,
+    sampled_prompts: Optional[dict] = None,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """Get the token throughput and latencies for the given model.
 
@@ -297,7 +297,7 @@ def run_token_benchmark(
     user_metadata: Dict[str, Any] = {},
     llm_api: str = 'openai',
     test_timeout_s: int = 600,
-    sampled_prompts: Optional[list[Dict[str, Any]]] = None,
+    sampled_prompts: Optional[dict] = None,
 ):
     """
     Args:
