@@ -696,7 +696,7 @@ async def benchmark(
 
     print("=" * 50)
 
-    return result
+    return result, outputs
 
 
 def main(args: argparse.Namespace):
@@ -816,7 +816,7 @@ def main(args: argparse.Namespace):
     else:
         raise ValueError(f"Unknown dataset: {args.dataset_name}")
 
-    benchmark_result = asyncio.run(
+    benchmark_result, individual_responses = asyncio.run(
         benchmark(
             backend=backend,
             api_url=api_url,
@@ -881,7 +881,7 @@ def main(args: argparse.Namespace):
         with open(file_name, "w") as outfile:
             json.dump(result_json, outfile)
 
-    return result_json
+    return result_json, individual_responses
 
 
 def get_args():

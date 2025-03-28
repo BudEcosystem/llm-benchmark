@@ -131,10 +131,10 @@ def get_token_throughput_latencies(
                 num_output_tokens = get_token_length(gen_text)
                 latency = request_metrics[common_metrics.E2E_LAT]
                 ttft = request_metrics[common_metrics.TTFT]
-                if num_output_tokens: 
-                    request_metrics[common_metrics.INTER_TOKEN_LAT] /= num_output_tokens
-                else:
-                    request_metrics[common_metrics.INTER_TOKEN_LAT] = 0
+                # if num_output_tokens:
+                #     request_metrics[common_metrics.INTER_TOKEN_LAT] /= num_output_tokens
+                # else:
+                #     request_metrics[common_metrics.INTER_TOKEN_LAT] = 0
                 if num_output_tokens > 1:
                     request_metrics[common_metrics.TPOT] = (latency - ttft) / (num_output_tokens - 1)
                 else:
@@ -164,10 +164,10 @@ def get_token_throughput_latencies(
         num_output_tokens = get_token_length(gen_text)
         latency = request_metrics[common_metrics.E2E_LAT]
         ttft = request_metrics[common_metrics.TTFT]
-        if num_output_tokens: 
-            request_metrics[common_metrics.INTER_TOKEN_LAT] /= num_output_tokens
-        else:
-            request_metrics[common_metrics.INTER_TOKEN_LAT] = 0
+        # if num_output_tokens: 
+        #     request_metrics[common_metrics.INTER_TOKEN_LAT] /= num_output_tokens
+        # else:
+        #     request_metrics[common_metrics.INTER_TOKEN_LAT] = 0
         if num_output_tokens > 1:
             request_metrics[common_metrics.TPOT] = (latency - ttft) / (num_output_tokens - 1)
         else:
@@ -396,7 +396,7 @@ def run_token_benchmark(
             print(individual_responses)
             raise e
 
-    return summary
+    return summary, individual_responses
 
 args = argparse.ArgumentParser(
     description="Run a token throughput and latency benchmark."

@@ -17,7 +17,7 @@ from llm_benchmark.profiler.constants import VllmProfileLayer
 from llm_benchmark.profiler.record_function_tracer import RecordFunctionTracer
 from llm_benchmark.utils.common import combine_multiple_datasets
 
-from .schemas import BenchmarkResultSchema
+from .schemas import BenchmarkResultSchema, BenchmarkRequestMetrics
 
 
 def get_profiler_result(result_dir: str):
@@ -106,27 +106,7 @@ def create_summary(results, results_dir, profiler_result: bool = False):
     return summary
 
 
-def format_vllm_result(result):
-    # formatted_result = {}
-    # formatted_result["model"] = result["model_id"]
-    # formatted_result["concurrency"] = result["concurrency"]
-    # formatted_result["input_tokens"] = result["input_tokens"]
-    # formatted_result["output_tokens"] = result["output_tokens"]
-    # formatted_result["total_input_tokens"] = result["total_input_tokens"]
-    # formatted_result["total_output_tokens"] = result["total_output_tokens"]
-    # formatted_result["completed"] = result["completed"]
-    # formatted_result["request_throughput"] = result["request_throughput"]
-    # formatted_result["output_throughput"] = result["output_throughput"]
-    # formatted_result["total_token_throughput"] = result["total_token_throughput"]
-    # formatted_result["output_throughput_per_user"] = result["mean_output_throughput_per_user"]
-    # formatted_result["mean_end_to_end_latency"] = result["mean_e2el_ms"]
-    # formatted_result["mean_ttft_ms"] = result["mean_ttft_ms"]
-    # formatted_result["p95_ttft_ms"] = result["p95_ttft_ms"]
-    # formatted_result["mean_tpot_ms"] = result["mean_tpot_ms"]
-    # formatted_result["p95_tpot_ms"] = result["p95_tpot_ms"]
-    # formatted_result["mean_itl_ms"] = result["mean_itl_ms"]
-    # formatted_result["p95_itl_ms"] = result["p95_itl_ms"]
-    
+def format_vllm_result(result, individual_responses):
     benchmark_result = BenchmarkResultSchema(
         model=result["model_id"],
         concurrency=result["concurrency"],
@@ -180,10 +160,17 @@ def format_vllm_result(result):
         max_e2el_ms=result["max_e2el_ms"],
         error_messages=result["errors"],
     )
-    return benchmark_result.model_dump()
+    
+    request_metrics = []
+    for metrics in individual_responses:
+        request_metrics.append(
+            BenchmarkRequestMetrics(**metrics).model_dump()
+        )
+    
+    return benchmark_result.model_dump(), request_metrics
 
 
-def format_llmperf_result(result):
+def format_llmperf_result(result, individual_responses):
     num_completed_requests = result["results"]["num_completed_requests"]
     num_requests_completed_per_min = result["results"]["num_completed_requests_per_min"]
     benchmark_result = BenchmarkResultSchema(
@@ -239,34 +226,10 @@ def format_llmperf_result(result):
         max_e2el_ms=result["results"]["end_to_end_latency_s"]["max"]*1000,
         error_messages=result["results"].get("error_msg", []),
     )
-    # formatted_result = {}
-    # formatted_result["model"] = result["model"]
-    # formatted_result["concurrency"] = result["num_concurrent_requests"]
-    # formatted_result["completed"] = result["results"]["num_completed_requests"]
-    # formatted_result["duration"] = result["results"]["end_to_end_latency_s"]["max"]
-    # formatted_result["request_throughput_per_min"] = result["results"][
-    #     "num_completed_requests_per_min"
-    # ]
-    # formatted_result["output_throughput"] = result["results"][
-    #     "mean_output_throughput_token_per_s"
-    # ]
-    # formatted_result["output_throughput_per_user"] = result["results"][
-    #     "request_output_throughput_token_per_s"
-    # ]["mean"]
-    # formatted_result["mean_end_to_end_latency"] = result["results"][
-    #     "end_to_end_latency_s"
-    # ]["mean"]
-    # formatted_result["mean_ttft_ms"] = result["results"]["ttft_s"]["mean"] * 1000
-    # formatted_result["p95_ttft_ms"] = (
-    #     result["results"]["ttft_s"]["quantiles"]["quantiles"]["p95"] * 1000
-    # )
-    # formatted_result["mean_itl_ms"] = (
-    #     result["results"]["inter_token_latency_s"]["mean"] * 1000
-    # )
-    # formatted_result["p95_itl_ms"] = (
-    #     result["results"]["inter_token_latency_s"]["quantiles"]["quantiles"]["p95"] * 1000
-    # )
-    return benchmark_result.model_dump()
+    request_metrics = []
+    for metrics in individual_responses:
+        request_metrics.append(BenchmarkRequestMetrics(**metrics).model_dump())
+    return benchmark_result.model_dump(), request_metrics
 
 
 def run_benchmark(
@@ -320,15 +283,15 @@ def run_benchmark(
     )
 
     if benchmark_script == "vllm":
-        result_output = vllm_run_benchmark(
+        result_output, individual_responses = vllm_run_benchmark(
             model, input_token, output_token, concurrency, base_url, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id
         )
-        result_output = format_vllm_result(result_output)
+        result_output, individual_responses = format_vllm_result(result_output, individual_responses)
     elif benchmark_script == "llmperf":
-        result_output = llmperf_run_benchmark(
+        result_output, individual_responses = llmperf_run_benchmark(
             model, concurrency, concurrency, input_token, 0, output_token, 0, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id
         )
-        result_output = format_llmperf_result(result_output)
+        result_output, individual_responses = format_llmperf_result(result_output, individual_responses)
     elif benchmark_script == "litellm_proxy":
         litellm_master_key = env_values.get("LITELLM_MASTER_KEY")
         if litellm_master_key is None:
@@ -338,10 +301,10 @@ def run_benchmark(
             "litellm_proxy_url": base_url,
             "litellm_master_key": litellm_master_key
         }
-        result_output = litellm_run_benchmark(
+        result_output, individual_responses = litellm_run_benchmark(
             model, concurrency, concurrency, input_token, 0, output_token, 0, llm_api="mock_litellm_proxy", request_metadata=request_metadata, latency_factors=latency_factors, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id
         )
-        result_output = format_llmperf_result(result_output)
+        result_output, individual_responses = format_llmperf_result(result_output, individual_responses)
 
     profiler_stats = {}
     if profiler_result:
@@ -354,4 +317,4 @@ def run_benchmark(
     #     if file.startswith("profiler_trace_") and file.endswith(".json"):
     #         shutil.move(os.path.join(traces_dir, file), run_id_dir)
 
-    return {**result_output, **profiler_stats}
+    return {**result_output, **profiler_stats, "individual_responses" : individual_responses}
