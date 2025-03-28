@@ -26,6 +26,7 @@ class RequestFuncInput:
     best_of: int = 1
     use_beam_search: bool = False
     dataset_id: Optional[UUID] = None
+    benchmark_id: Optional[UUID] = None
 
 
 @dataclass
@@ -42,6 +43,7 @@ class RequestFuncOutput:
     req_output_throughput : float = 0.0
     dataset_id: Optional[UUID] = None
     output_len: Optional[int] = 0
+    benchmark_id: Optional[UUID] = None
 
 
 async def async_request_tgi(
@@ -66,6 +68,8 @@ async def async_request_tgi(
         }
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
+        output.dataset_id = request_func_input.dataset_id
+        output.benchmark_id = request_func_input.benchmark_id
 
         ttft = 0.0
         st = time.perf_counter()
@@ -105,6 +109,8 @@ async def async_request_tgi(
                     output.latency = latency
                     output.success = True
                     output.generated_text = data["generated_text"]
+                    if token_count > 1:
+                        output.tpot = ((latency - ttft) / (token_count - 1))
                     output.req_output_throughput = token_count/latency
                      
                 else:
@@ -140,6 +146,8 @@ async def async_request_trt_llm(
         }
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
+        output.dataset_id = request_func_input.dataset_id
+        output.benchmark_id = request_func_input.benchmark_id
 
         ttft = 0.0
         st = time.perf_counter()
@@ -175,6 +183,8 @@ async def async_request_trt_llm(
                     latency = most_recent_timestamp - st
                     output.latency = latency
                     output.success = True
+                    if token_count > 1:
+                        output.tpot = ((latency - ttft) / (token_count - 1))
                     output.req_output_throughput = token_count/latency
 
                 else:
@@ -206,6 +216,8 @@ async def async_request_deepspeed_mii(
         }
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
+        output.dataset_id = request_func_input.dataset_id
+        output.benchmark_id = request_func_input.benchmark_id
 
         # NOTE: DeepSpeed-MII doesn't support streaming as of Jan 28 2024,
         # will use 0 as placeholder.
@@ -260,6 +272,7 @@ async def async_request_openai_completions(
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
         output.dataset_id = request_func_input.dataset_id
+        output.benchmark_id = request_func_input.benchmark_id
 
         token_count = 0
         generated_text = ""
@@ -304,7 +317,8 @@ async def async_request_openai_completions(
                     output.generated_text = generated_text
                     output.success = True
                     output.latency = latency
-                    output.tpot = (latency - ttft) / (token_count - 1)
+                    if token_count > 1:
+                        output.tpot = ((latency - ttft) / (token_count - 1))
                     output.req_output_throughput = token_count/latency
                 else:
                     output.error = response.reason or ""
@@ -441,6 +455,7 @@ async def async_request_api_chat_completions(
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
         output.dataset_id = request_func_input.dataset_id
+        output.benchmark_id = request_func_input.benchmark_id
 
         generated_text = ""
         ttft = 0.0
@@ -486,6 +501,8 @@ async def async_request_api_chat_completions(
                     output.generated_text = generated_text
                     output.success = True
                     output.latency = total_request_time
+                    if token_count > 1:
+                        output.tpot = ((latency - ttft) / (token_count - 1))
                     
                     output.req_output_throughput = token_count/latency
                 else:

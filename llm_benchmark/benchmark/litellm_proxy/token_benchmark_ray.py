@@ -7,6 +7,7 @@ import re
 import time
 import random
 from typing import Any, Dict, List, Optional, Tuple
+from uuid import UUID
 
 import pandas as pd
 import ray
@@ -45,6 +46,7 @@ def get_token_throughput_latencies(
     request_metadata: Optional[Dict[str, Any]] = None,
     latency_factors: Optional[Dict[str, float]] = None,
     sampled_prompts: Optional[dict] = None,
+    benchmark_id: Optional[UUID] = None,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """Get the token throughput and latencies for the given model.
 
@@ -143,6 +145,7 @@ def get_token_throughput_latencies(
                     request_metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = num_output_tokens / request_metrics[common_metrics.E2E_LAT]
                 else:
                     request_metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = 0
+                request_metrics["benchmark_id"] = benchmark_id
                 all_metrics.append(request_metrics)
             completed_requests.extend(all_metrics)
         pbar.update(len(completed_requests) - num_completed_requests)
@@ -175,7 +178,7 @@ def get_token_throughput_latencies(
             request_metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = num_output_tokens / request_metrics[common_metrics.E2E_LAT]
         else:
             request_metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = 0
-                
+        request_metrics["benchmark_id"] = benchmark_id       
         all_metrics.append(request_metrics)
     completed_requests.extend(all_metrics)
 
@@ -320,6 +323,7 @@ def run_token_benchmark(
     request_metadata: Optional[Dict[str, Any]] = None,
     latency_factors: Optional[Dict[str, float]] = None,
     sampled_prompts: Optional[dict] = None,
+    benchmark_id: Optional[UUID] = None,
 ):
     """
     Args:
@@ -358,6 +362,7 @@ def run_token_benchmark(
         request_metadata=request_metadata,
         latency_factors=latency_factors,
         sampled_prompts=sampled_prompts,
+        benchmark_id=benchmark_id,
     )
 
     if results_dir:

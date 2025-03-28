@@ -2,6 +2,7 @@ import os
 import csv
 import shutil
 from typing import Optional
+from uuid import UUID
 
 from llm_benchmark.benchmark.vllm_benchmark.benchmark_serving import (
     run_benchmark as vllm_run_benchmark,
@@ -281,6 +282,7 @@ def run_benchmark(
     env_values: Optional[dict] = None,
     latency_factors: Optional[dict] = None,
     datasets: Optional[list] = None,
+    benchmark_id: Optional[UUID] = None,
     seed: Optional[int] = None,
 ):
     # Set environment variables directly
@@ -319,12 +321,12 @@ def run_benchmark(
 
     if benchmark_script == "vllm":
         result_output = vllm_run_benchmark(
-            model, input_token, output_token, concurrency, base_url, sampled_prompts=sampled_prompts
+            model, input_token, output_token, concurrency, base_url, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id
         )
         result_output = format_vllm_result(result_output)
     elif benchmark_script == "llmperf":
         result_output = llmperf_run_benchmark(
-            model, concurrency, concurrency, input_token, 0, output_token, 0, sampled_prompts=sampled_prompts
+            model, concurrency, concurrency, input_token, 0, output_token, 0, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id
         )
         result_output = format_llmperf_result(result_output)
     elif benchmark_script == "litellm_proxy":
@@ -337,7 +339,7 @@ def run_benchmark(
             "litellm_master_key": litellm_master_key
         }
         result_output = litellm_run_benchmark(
-            model, concurrency, concurrency, input_token, 0, output_token, 0, llm_api="mock_litellm_proxy", request_metadata=request_metadata, latency_factors=latency_factors, sampled_prompts=sampled_prompts
+            model, concurrency, concurrency, input_token, 0, output_token, 0, llm_api="mock_litellm_proxy", request_metadata=request_metadata, latency_factors=latency_factors, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id
         )
         result_output = format_llmperf_result(result_output)
 

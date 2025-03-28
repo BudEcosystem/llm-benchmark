@@ -33,6 +33,7 @@ import warnings
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
+from uuid import UUID
 
 from datasets import load_dataset
 
@@ -484,6 +485,7 @@ async def benchmark(
     disable_tqdm: bool,
     profile: bool,
     selected_percentiles: List[str],
+    benchmark_id: Optional[UUID] = None,
 ):
     if backend in ASYNC_REQUEST_FUNCS:
         request_func = ASYNC_REQUEST_FUNCS[backend]
@@ -543,6 +545,7 @@ async def benchmark(
             best_of=best_of,
             use_beam_search=use_beam_search,
             dataset_id=dataset_id,
+            benchmark_id=benchmark_id,
         )
         tasks.append(
             asyncio.create_task(
@@ -704,6 +707,7 @@ def main(args: argparse.Namespace):
     model_id = args.model
     tokenizer_id = args.tokenizer if args.tokenizer is not None else args.model
     sampled_prompts = args.sampled_prompts
+    benchmark_id = args.benchmark_id
 
     if args.base_url is not None:
         api_url = f"{args.base_url}{args.endpoint}"
@@ -826,6 +830,7 @@ def main(args: argparse.Namespace):
             disable_tqdm=args.disable_tqdm,
             profile=args.profile,
             selected_percentiles=[float(p) for p in args.metric_percentiles.split(",")],
+            benchmark_id=benchmark_id,
         )
     )
 
@@ -1081,15 +1086,21 @@ def get_args():
         default=[],
         help="Provide a list of sampled prompts as JSON string (Example: '[{\"id\": 1, \"prompt\": \"Q1\", \"response\": \"A1\"}]')"
     )
+    parser.add_argument(
+        "--benchmark_id",
+        type=str,
+        default=None,
+        help="UUID of the benchmark run. If not provided, will be set to None."
+    )
     args = parser.parse_args()
 
     return args
 
 
-def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[dict] = None):
+def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[dict] = None, benchmark_id: Optional[UUID] = None):
     # args = get_args()
     class BenchmarkArgs:
-        def __init__(self, model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[dict] = None):
+        def __init__(self, model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[dict] = None, benchmark_id: Optional[UUID] = None):
             self.model = model
             self.tokenizer = model
             self.num_prompts = num_prompts
@@ -1124,8 +1135,9 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_p
             self.result_dir = "./results"
             self.result_filename = None
             self.sampled_prompts = sampled_prompts
+            self.benchmark_id = benchmark_id
 
-    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url, sampled_prompts)
+    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url, sampled_prompts, benchmark_id)
 
     return main(args)
 
