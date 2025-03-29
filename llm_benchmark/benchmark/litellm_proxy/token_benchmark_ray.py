@@ -105,7 +105,7 @@ def get_token_throughput_latencies(
     ):
         iter += 1
         prompt = prompts.pop()
-        num_input_tokens = prompt[-1]
+        num_input_tokens = prompt[1]
         num_output_tokens = num_output_tokens_list.pop()
         default_sampling_params = {"max_tokens": num_output_tokens}
         default_sampling_params.update(additional_sampling_params)

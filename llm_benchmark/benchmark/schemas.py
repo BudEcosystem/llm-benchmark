@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 from typing import Optional
-from typing import UUID
+from uuid import UUID
 
 class BenchmarkResultSchema(BaseModel):
     model: str
