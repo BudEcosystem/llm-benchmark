@@ -119,7 +119,7 @@ def format_vllm_result(result, individual_responses):
         request_throughput=result["request_throughput"],
         input_throughput=result["input_throughput"],
         output_throughput=result["output_throughput"],
-        output_throughput_per_user=result["output_throughput_per_user"],
+        output_throughput_per_user=result["mean_output_throughput_per_user"],
         p25_throughput=result["percentiles_output_throughput_per_user"][0][-1],
         p75_throughput=result["percentiles_output_throughput_per_user"][1][-1],
         p95_throughput=result["percentiles_output_throughput_per_user"][2][-1],
