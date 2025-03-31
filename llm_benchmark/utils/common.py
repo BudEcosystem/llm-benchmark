@@ -129,19 +129,19 @@ def distribute_samples_evenly(datasets, concurrency):
 
     for i, dataset in enumerate(datasets):
         extra_sample = 1 if i < remainder else 0  # Distribute remainder evenly
-        dataset_samples_mapping[dataset.id] = base_samples_per_dataset + extra_sample
+        dataset_samples_mapping[dataset["id"]] = base_samples_per_dataset + extra_sample
 
     return dataset_samples_mapping
 
 
 def handle_hf_datasets(dataset, seed, dataset_sample_size=None):
-    data = load_dataset(dataset.hf_hub_url, split=dataset.split or "train")
+    data = load_dataset(dataset["hf_hub_url"], split=dataset["split"] or "train")
     shuffled_data = data.shuffle(seed=seed)
     data_samples = get_formatted_samples_from_dataset(shuffled_data, dataset, dataset_sample_size)
     return data_samples
 
 def handle_modelscope_datasets(dataset, seed, dataset_sample_size=None):
-    data = MsDataset.load(dataset.ms_hub_url, split=dataset.split or 'train', subset_name=dataset.subset)
+    data = MsDataset.load(dataset["ms_hub_url"], split=dataset["split"] or "train", subset_name=dataset["subset"])
     hf_dataset = data.to_hf_dataset()
     shuffled_data = hf_dataset.shuffle(seed=seed)
     data_samples = get_formatted_samples_from_dataset(shuffled_data, dataset, dataset_sample_size)
@@ -150,7 +150,7 @@ def handle_modelscope_datasets(dataset, seed, dataset_sample_size=None):
 
 def handle_local_datasets(dataset, seed, is_folder=False, dataset_sample_size=None):
     random.seed(seed)
-    dataset_files = get_dataset_files([dataset.folder], extensions=[".jsonl", ".parquet", ".json"], is_folder=is_folder)[0]
+    dataset_files = get_dataset_files([dataset["folder"]], extensions=[".jsonl", ".parquet", ".json"], is_folder=is_folder)[0]
     
     dataset_samples = []
     random.shuffle(dataset_files)
@@ -171,14 +171,14 @@ def handle_local_datasets(dataset, seed, is_folder=False, dataset_sample_size=No
 
 def get_formatted_samples_from_dataset(data: list, dataset, dataset_sample_size: int):
     default_column_mapping = {"prompt": "instruction", "query": "input", "response": "output", "chosen": None, "messages": "conversations"}
-    dataset_column_mapping = dataset.columns or {}
+    dataset_column_mapping = dataset["columns"] or {}
     default_tags_mapping = {"role_tag": "from", "content_tag": "value", "user_tag": "human", "assistant_tag": "gpt"}
-    dataset_tags_mapping = dataset.tags or {}
+    dataset_tags_mapping = dataset["tags"] or {}
     columns = columns = {k: dataset_column_mapping[k] if k in dataset_column_mapping else v 
            for k, v in default_column_mapping.items()}
     tags = {k: dataset_tags_mapping[k] if k in dataset_tags_mapping else v 
            for k, v in default_tags_mapping.items()}
-    formatting = dataset.formatting or 'alpaca'
+    formatting = dataset["formatting"] or 'alpaca'
 
     samples = []
     for sample in data:
@@ -225,17 +225,17 @@ def combine_multiple_datasets(
     combined_data = {}
     
     for dataset in datasets:
-        if dataset.hf_hub_url:
-            combined_data[dataset.id] = handle_hf_datasets(dataset, seed, dataset_sample_size=dataset_samples_mapping[dataset.id])
-        elif dataset.ms_hub_url:
-            combined_data[dataset.id] = handle_modelscope_datasets(dataset, seed, dataset_sample_size=dataset_samples_mapping[dataset.id])
-        elif dataset.script_url:
+        if dataset["hf_hub_url"]:
+            combined_data[dataset["id"]] = handle_hf_datasets(dataset, seed, dataset_sample_size=dataset_samples_mapping[dataset["id"]])
+        elif dataset["ms_hub_url"]:
+            combined_data[dataset["id"]] = handle_modelscope_datasets(dataset, seed, dataset_sample_size=dataset_samples_mapping[dataset["id"]])
+        elif dataset["script_url"]:
             raise NotImplementedError("Loading dataset using script url is currently not supported.")
-        elif dataset.file_name:
-            combined_data[dataset.id] = handle_local_datasets(dataset, seed, dataset_sample_size=dataset_samples_mapping[dataset.id])
-        elif dataset.folder:
+        elif dataset["file_name"]:
+            combined_data[dataset["id"]] = handle_local_datasets(dataset, seed, dataset_sample_size=dataset_samples_mapping[dataset["id"]])
+        elif dataset["folder"]:
             try:
-                combined_data[dataset.id] = handle_local_datasets(dataset, seed, is_folder=True, dataset_sample_size=dataset_samples_mapping[dataset.id])
+                combined_data[dataset["id"]] = handle_local_datasets(dataset, seed, is_folder=True, dataset_sample_size=dataset_samples_mapping[dataset["id"]])
             except ValueError:
                 raise NotImplementedError
         else:
