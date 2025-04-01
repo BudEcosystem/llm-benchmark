@@ -163,10 +163,10 @@ def compute_latency_factors(model: str, request_metadata: Dict[str, Any], llm_ap
     N_output = []
     T_total = []
     for _ in range(num_completed_requests):
-        result_output = litellm_run_benchmark(
+        result_output, individual_responses = litellm_run_benchmark(
             model, 1, 1, mean_input_token, stddev_input_token, mean_output_token, stddev_output_token, llm_api=llm_api, request_metadata=request_metadata
         )
-        result_output = format_llmperf_result(result_output)
+        result_output, _ = format_llmperf_result(result_output, individual_responses)
         if result_output["error_messages"] and result_output["completed"] == 0:
             raise Exception(f"Error messages: {', '.join(result_output['error_messages'])}")
         N_input.append(result_output["input_tokens"])
