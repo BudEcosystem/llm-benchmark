@@ -164,7 +164,7 @@ def format_vllm_result(result, individual_responses):
     request_metrics = []
     for metrics in individual_responses:
         request_metrics.append(
-            BenchmarkRequestMetrics(**metrics).model_dump()
+            BenchmarkRequestMetrics.model_validate(metrics, from_attributes=True).model_dump(mode="json")
         )
     
     return benchmark_result.model_dump(), request_metrics
