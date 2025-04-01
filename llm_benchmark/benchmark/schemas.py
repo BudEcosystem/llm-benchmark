@@ -74,6 +74,8 @@ class BenchmarkRequestMetrics(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def handle_multiple_aliases_for_error(cls, values):
+        if not isinstance(values, dict):  # Ensure values is a dictionary
+            values = values.model_dump() if hasattr(values, "model_dump") else values.__dict__
         if "error_message" in values:
             values["error_msg"] = values.pop("error_message")
         if "error_code" in values and values["error_code"] is not None:
