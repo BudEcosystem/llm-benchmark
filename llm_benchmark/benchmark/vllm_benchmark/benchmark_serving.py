@@ -332,7 +332,7 @@ def sample_random_requests(
         prompt = tokenizer.decode(
             [(offsets[i] + i + j) % tokenizer.vocab_size for j in range(input_lens[i])]
         )
-        input_requests.append((prompt, int(input_lens[i]), int(output_lens[i], None)))
+        input_requests.append((prompt, int(input_lens[i]), int(output_lens[i]), None))
 
     return input_requests
 
