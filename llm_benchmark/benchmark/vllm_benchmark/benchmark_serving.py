@@ -847,7 +847,7 @@ def main(args: argparse.Namespace):
     result_json["num_prompts"] = args.num_prompts
     result_json["input_tokens"] = args.random_input_len
     result_json["output_tokens"] = args.random_output_len
-    result_json["concurrency"] = args.num_of_prompts
+    result_json["concurrency"] = args.num_prompts
 
     # Metadata
     if args.metadata:
