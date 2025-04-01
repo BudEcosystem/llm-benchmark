@@ -286,6 +286,7 @@ def run_benchmark(
         result_output, individual_responses = vllm_run_benchmark(
             model, input_token, output_token, concurrency, base_url, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id
         )
+        print(f"local model result_output: {result_output}" )
         result_output, individual_responses = format_vllm_result(result_output, individual_responses)
     elif benchmark_script == "llmperf":
         result_output, individual_responses = llmperf_run_benchmark(
