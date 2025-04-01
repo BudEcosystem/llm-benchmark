@@ -478,7 +478,7 @@ async def benchmark(
     base_url: str,
     model_id: str,
     tokenizer: PreTrainedTokenizerBase,
-    input_requests: List[Tuple[str, int, int]],
+    input_requests: List[Tuple[str, int, int, Optional[str]]],
     best_of: int,
     use_beam_search: bool,
     request_rate: float,
@@ -493,7 +493,7 @@ async def benchmark(
         raise ValueError(f"Unknown backend: {backend}")
 
     print("Starting initial single prompt test run...")
-    test_prompt, test_prompt_len, test_output_len = input_requests[0]
+    test_prompt, test_prompt_len, test_output_len, dataset_id = input_requests[0]
     test_input = RequestFuncInput(
         model=model_id,
         prompt=test_prompt,
