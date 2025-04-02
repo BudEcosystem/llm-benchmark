@@ -230,7 +230,7 @@ def format_llmperf_result(result, individual_responses):
     )
     request_metrics = []
     for metrics in individual_responses:
-        request_metrics.append(BenchmarkRequestMetrics(**metrics).model_dump())
+        request_metrics.append(BenchmarkRequestMetrics(**metrics).model_dump(mode="json"))
     return benchmark_result.model_dump(), request_metrics
 
 
