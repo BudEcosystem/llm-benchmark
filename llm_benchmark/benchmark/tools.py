@@ -173,6 +173,8 @@ def format_vllm_result(result, individual_responses):
 def format_llmperf_result(result, individual_responses):
     num_completed_requests = result["results"]["num_completed_requests"]
     num_requests_completed_per_min = result["results"]["num_completed_requests_per_min"]
+    total_input_tokens = sum([metric["number_input_tokens"] for metric in individual_responses])
+    total_output_tokens = sum([metric["number_output_tokens"] for metric in individual_responses])
     benchmark_result = BenchmarkResultSchema(
         model=result["model"],
         concurrency=result["num_concurrent_requests"],
@@ -180,8 +182,8 @@ def format_llmperf_result(result, individual_responses):
         successful_requests=num_completed_requests,
         input_tokens=result["mean_input_tokens"],
         output_tokens=result["mean_output_tokens"],
-        total_input_tokens=result["results"]["number_input_tokens"]["mean"]*num_completed_requests,
-        total_output_tokens=result["results"]["number_output_tokens"]["mean"]*num_completed_requests,
+        total_input_tokens=total_input_tokens,
+        total_output_tokens=total_output_tokens,
         request_throughput=num_requests_completed_per_min,
         input_throughput=result["results"]["number_input_tokens"]["mean"]*num_requests_completed_per_min,
         output_throughput=result["results"]["mean_output_throughput_token_per_s"],
