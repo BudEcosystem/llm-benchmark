@@ -7,6 +7,7 @@ import re
 import time
 import random
 from typing import Any, Dict, List, Optional, Tuple
+from uuid import UUID
 
 import pandas as pd
 import ray
@@ -43,7 +44,8 @@ def get_token_throughput_latencies(
     max_num_completed_requests: int = 500,
     test_timeout_s=90,
     llm_api="openai",
-    sampled_prompts: Optional[List[str]] = None,
+    sampled_prompts: Optional[dict] = None,
+    benchmark_id: Optional[UUID] = None,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """Get the token throughput and latencies for the given model.
 
@@ -120,10 +122,10 @@ def get_token_throughput_latencies(
                 num_output_tokens = get_token_length(gen_text)
                 latency = request_metrics[common_metrics.E2E_LAT]
                 ttft = request_metrics[common_metrics.TTFT]
-                if num_output_tokens: 
-                    request_metrics[common_metrics.INTER_TOKEN_LAT] /= num_output_tokens
-                else:
-                    request_metrics[common_metrics.INTER_TOKEN_LAT] = 0
+                # if num_output_tokens: 
+                #     request_metrics[common_metrics.INTER_TOKEN_LAT] /= num_output_tokens
+                # else:
+                #     request_metrics[common_metrics.INTER_TOKEN_LAT] = 0
                 if num_output_tokens > 1:
                     request_metrics[common_metrics.TPOT] = (latency - ttft) / (num_output_tokens - 1)
                 else:
@@ -131,6 +133,7 @@ def get_token_throughput_latencies(
                 request_metrics[common_metrics.NUM_OUTPUT_TOKENS] = num_output_tokens
                 request_metrics[common_metrics.NUM_TOTAL_TOKENS] = request_metrics[common_metrics.NUM_INPUT_TOKENS] + num_output_tokens
                 request_metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = num_output_tokens / request_metrics[common_metrics.E2E_LAT]
+                request_metrics["benchmark_id"] = benchmark_id
                 all_metrics.append(request_metrics)
             completed_requests.extend(all_metrics)
         pbar.update(len(completed_requests) - num_completed_requests)
@@ -149,10 +152,10 @@ def get_token_throughput_latencies(
         num_output_tokens = get_token_length(gen_text)
         latency = request_metrics[common_metrics.E2E_LAT]
         ttft = request_metrics[common_metrics.TTFT]
-        if num_output_tokens: 
-            request_metrics[common_metrics.INTER_TOKEN_LAT] /= num_output_tokens
-        else:
-            request_metrics[common_metrics.INTER_TOKEN_LAT] = 0
+        # if num_output_tokens: 
+        #     request_metrics[common_metrics.INTER_TOKEN_LAT] /= num_output_tokens
+        # else:
+        #     request_metrics[common_metrics.INTER_TOKEN_LAT] = 0
         if num_output_tokens > 1:
             request_metrics[common_metrics.TPOT] = (latency - ttft) / (num_output_tokens - 1)
         else:
@@ -160,7 +163,7 @@ def get_token_throughput_latencies(
         request_metrics[common_metrics.NUM_OUTPUT_TOKENS] = num_output_tokens
         request_metrics[common_metrics.NUM_TOTAL_TOKENS] = request_metrics[common_metrics.NUM_INPUT_TOKENS] + num_output_tokens
         request_metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = num_output_tokens / request_metrics[common_metrics.E2E_LAT]
-                
+        request_metrics["benchmark_id"] = benchmark_id
         all_metrics.append(request_metrics)
     completed_requests.extend(all_metrics)
 
@@ -297,7 +300,8 @@ def run_token_benchmark(
     user_metadata: Dict[str, Any] = {},
     llm_api: str = 'openai',
     test_timeout_s: int = 600,
-    sampled_prompts: Optional[list[Dict[str, Any]]] = None,
+    sampled_prompts: Optional[dict] = None,
+    benchmark_id: Optional[UUID] = None,
 ):
     """
     Args:
@@ -334,6 +338,7 @@ def run_token_benchmark(
         num_concurrent_requests=num_concurrent_requests,
         additional_sampling_params=json.loads(additional_sampling_params),
         sampled_prompts=sampled_prompts,
+        benchmark_id=benchmark_id,
     )
 
     if results_dir:
@@ -367,7 +372,7 @@ def run_token_benchmark(
             print(individual_responses)
             raise e
 
-    return summary
+    return summary, individual_responses
 
 args = argparse.ArgumentParser(
     description="Run a token throughput and latency benchmark."

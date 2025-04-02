@@ -1,5 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from typing import Optional
+from uuid import UUID
 
 class BenchmarkResultSchema(BaseModel):
     model: str
@@ -53,3 +54,31 @@ class BenchmarkResultSchema(BaseModel):
     min_e2el_ms: Optional[float] = None
     max_e2el_ms: Optional[float] = None
     error_messages: Optional[list] = []
+
+
+class BenchmarkRequestMetrics(BaseModel):
+    benchmark_id: UUID | None = Field(None, alias="benchmark_id")
+    dataset_id: UUID | None = Field(None, alias="dataset_id")
+    latency: float | None = Field(None, alias="end_to_end_latency_s")
+    success: bool | None = Field(True, alias="success")
+    error: str | None = Field(None, alias="error_msg")
+    prompt_len: int | None = Field(None, alias="number_input_tokens")
+    output_len: int | None = Field(None, alias="number_output_tokens")
+    req_output_throughput: float | None = Field(None, alias="request_output_throughput_token_per_s")
+    ttft: float | None = Field(None, alias="ttft_s")
+    tpot: float | None = Field(None, alias="tpot_s")
+    itl: list | None = Field(None, alias="inter_token_latency_s")
+    
+    model_config = ConfigDict(extra="allow")
+    
+    @model_validator(mode="before")
+    @classmethod
+    def handle_multiple_aliases_for_error(cls, values):
+        if not isinstance(values, dict):  # Ensure values is a dictionary
+            values = values.model_dump() if hasattr(values, "model_dump") else values.__dict__
+        if "error_message" in values:
+            values["error_msg"] = values.pop("error_message")
+        if "error_code" in values and values["error_code"] is not None:
+            values["success"] = False
+        return values
+

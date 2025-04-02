@@ -118,7 +118,7 @@ def randomly_sample_sonnet_lines_prompt(
                 break
             prompt += line_to_add
             remaining_prompt_tokens -= get_token_length(line_to_add)
-    return (prompt, num_prompt_tokens)
+    return (prompt, num_prompt_tokens, None)
 
 
 def sample_random_positive_int(mean: int, stddev: int) -> int:
@@ -163,10 +163,10 @@ def compute_latency_factors(model: str, request_metadata: Dict[str, Any], llm_ap
     N_output = []
     T_total = []
     for _ in range(num_completed_requests):
-        result_output = litellm_run_benchmark(
+        result_output, individual_responses = litellm_run_benchmark(
             model, 1, 1, mean_input_token, stddev_input_token, mean_output_token, stddev_output_token, llm_api=llm_api, request_metadata=request_metadata
         )
-        result_output = format_llmperf_result(result_output)
+        result_output, _ = format_llmperf_result(result_output, individual_responses)
         if result_output["error_messages"] and result_output["completed"] == 0:
             raise Exception(f"Error messages: {', '.join(result_output['error_messages'])}")
         N_input.append(result_output["input_tokens"])
@@ -214,13 +214,14 @@ def sample_requests(
     return prompts, num_output_tokens_list
 
 
-def transform_sampled_requests(prompts: list[dict], tokenizer) -> list[Tuple[str, int]]:
+def transform_sampled_requests(sampled_prompts: dict, tokenizer) -> list[Tuple[str, int]]:
     get_token_length = lambda text: len(tokenizer.encode(text))
     sampled_requests = []
     num_output_token_list = []
-    for each in prompts:
-        prompt = each["prompt"]
-        sampled_requests.append((prompt, get_token_length(prompt)))
-        num_output_token_list.append(get_token_length(each["response"]))
+    for dataset_id, prompts in sampled_prompts.items():
+        for each in prompts:
+            prompt = each["prompt"]
+            sampled_requests.append((prompt, get_token_length(prompt), dataset_id))
+            num_output_token_list.append(get_token_length(each["response"]))
     return sampled_requests, num_output_token_list
 
