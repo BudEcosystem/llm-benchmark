@@ -16,3 +16,5 @@ transformers
 pandas
 datasets
 pyarrow
+
+locust
