@@ -1,0 +1,88 @@
+args:
+  model-id:
+    - sentence-transformers/all-MiniLM-L6-v2 # 22m, dim: 384, ctx: 256
+    # - thenlper/gte-small-zh # 30m, dim: 1024, ctx: 512
+    # - BAAI/bge-small-zh # 33m, dim: 512, ctx: 512
+    # - Lajavaness/bilingual-embedding-small # 117m, dim: 384, ctx: 512
+    # - sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 # 118m, dim: 768, ctx: 512
+    # - jinaai/jina-embeddings-v2-base-en # 137m, dim: 768, ctx: 8192
+    # # - Alibaba-NLP/gte-modernbert-base # 149m, dim: 768, ctx: 8192
+    # - intfloat/multilingual-e5-base # 278m, dim: 768, ctx: 512
+    # - Alibaba-NLP/gte-multilingual-base # 305m, dim: 1024, ctx: 8192
+    # - Alibaba-NLP/gte-large-en-v1.5 # 434m, dim: 1024, ctx: 8192
+    # - HIT-TMG/KaLM-embedding-multilingual-mini-instruct-v1 # 494m, dim: 896, ctx: 131072
+    # - intfloat/multilingual-e5-large-instruct # 560m, dim: 1024, ctx: 514
+    # - manu/bge-m3-custom-fr # 567m, dim: 1024, ctx: 8194
+    # - dunzhang/stella_en_400M_v5 # 435m, dim: 4096, ctx: 8192 
+    # - Alibaba-NLP/gte-Qwen2-1.5B-instruct # 1b, dim: 8960, ctx: 131072
+    # - manu/sentence_croissant_alpha_v0.3 # 1b, dim: 2048, ctx: 2048
+    # - DeepPavlov/rubert-base-cased # 1b, dim: 768, ctx: 512
+    # # - colqwen2-v1.0-merged # 2.21b, dim: 1024, ctx: 32768
+  port: 8989
+  batch-size: 1024
+  engine:
+    - torch
+    # - ctranslate2
+    # - optimum
+  lengths-via-tokenize:
+    - true
+    - false
+  trust-remote-code: true
+  dtype: bfloat16
+  device: cpu
+  no-model-warmup: true
+
+run_command: v2
+health_check_endpoint: /health
+benchmark_endpoint: /embeddings
+
+envs:
+  DO_NOT_TRACK: 1
+  ENABLE_PROFILING: true
+  DOCKER_CPUSET_CPUS: "64-95"
+  OMP_NUM_THREADS: 32
+  MKL_NUM_THREADS: 32
+  NUMEXPR_NUM_THREADS: 32
+  OPENBLAS_NUM_THREADS: 32
+  VECLIB_MAXIMUM_THREADS: 32
+
+run_config:
+  mean_input_tokens:
+    - 50
+    - 100
+    - 200
+    - 300
+    - 400
+    - 500
+    - 750
+    - 1000
+    - 1500
+    - 2000
+    - 3000
+    - 4000
+    - 5000
+    - 5500
+    - 6000
+    - 6500
+    - 7000
+    - 7500
+    - 8000
+    - 8500
+    - 9000
+    - 9500
+    - 10000
+    - 12000
+    - 14000
+    - 16000
+  num_concurrent_requests: 
+    - 1
+    - 10
+    - 50
+    - 100
+    - 150
+    - 200
+    - 250
+    - 300
+    - 500
+    - 750
+    - 1000
