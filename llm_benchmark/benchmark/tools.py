@@ -41,24 +41,24 @@ def create_summary(results, results_dir, profiler_result: bool = False):
         summary["Mean Input Tokens"] = result["input_tokens"]
         summary["Mean Output Tokens"] = result["output_tokens"]
         summary["Concurrent Requests"] = result["concurrency"]
-        summary["Completed Requests"] = result["completed"]
+        summary["Completed Requests"] = result["successful_requests"]
         summary["Duration (s)"] = round(result["duration"], 2)
         summary["Request Throughput (req/min)"] = round(
-            result.get("request_throughput_per_min", 0), 2
+            result.get("request_throughput", 0), 2
         )
         summary["Output Token Throughput (tok/s)"] = round(
-            result.get("output_throughput", 0), 2
+            result.get("output_throughput") or 0, 2
         )
         summary["Output Token Throughput per User (tok/s)"] = round(
-            result.get("output_throughput_per_user", 0), 2
+            result.get("output_throughput_per_user") or 0, 2
         )
         summary["Mean End to End Latency (s)"] = round(
-            result["mean_end_to_end_latency"], 2
+            result["mean_e2el_ms"] or 0, 2
         )
-        summary["Mean TTFT (ms)"] = round(result.get("mean_ttft_ms", 0), 2)
-        summary["P95 TTFT (ms)"] = round(result.get("p95_ttft_ms", 0), 2)
-        summary["Mean Inter Token Latency (ms)"] = round(result.get("mean_itl_ms", 0), 2)
-        summary["P95 Inter Token Latency (ms)"] = round(result.get("p95_itl_ms", 0), 2)
+        summary["Mean TTFT (ms)"] = round(result.get("mean_ttft_ms") or 0, 2)
+        summary["P95 TTFT (ms)"] = round(result.get("p95_ttft_ms") or 0, 2)
+        summary["Mean Inter Token Latency (ms)"] = round(result.get("mean_itl_ms") or 0, 2)
+        summary["P95 Inter Token Latency (ms)"] = round(result.get("p95_itl_ms") or 0, 2)
 
         if profiler_result:
             for layer in layers:
@@ -279,7 +279,18 @@ def format_budlatent_result(result):
     formatted_result["mean_end_to_end_latency"] = result["mean_e2el_ms"]
     formatted_result["duration"] = result["duration"]
 
-    return formatted_result
+    benchmark_result = BenchmarkResultSchema(
+        model=result["model"],
+        concurrency=result["concurrency"],
+        duration=result["duration"],
+        successful_requests=result["completed"],
+        input_tokens=result["num_tokens"],
+        # output_tokens=result["output_tokens"],
+        request_throughput=result["request_throughput"],
+        mean_e2el_ms=result["mean_e2el_ms"],
+    )
+
+    return benchmark_result.model_dump()
 
 
 def run_benchmark(
