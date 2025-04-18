@@ -52,7 +52,7 @@ def create_summary(results, results_dir, profiler_result: bool = False):
         summary["Output Token Throughput per User (tok/s)"] = round(
             result.get("output_throughput_per_user") or 0, 2
         )
-        summary["Mean End to End Latency (s)"] = round(
+        summary["Mean End to End Latency (ms)"] = round(
             result["mean_e2el_ms"] or 0, 2
         )
         summary["Mean TTFT (ms)"] = round(result.get("mean_ttft_ms") or 0, 2)
