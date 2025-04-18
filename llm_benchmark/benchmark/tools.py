@@ -311,8 +311,9 @@ def run_benchmark(
     # TODO: Removed it because litellm_proxy requires actual api key
     # and this was overriding the one in the envs
     # If required to set for other engines, can be set as env
-    # os.environ["OPENAI_API_KEY"] = "secret_abcdefg"
-    # os.environ["OPENAI_API_BASE"] = base_url
+    if benchmark_script != "litellm_proxy":
+        os.environ["OPENAI_API_KEY"] = "secret_abcdefg"
+        os.environ["OPENAI_API_BASE"] = base_url
     
     sampled_prompts = combine_multiple_datasets(datasets, concurrency)
 
