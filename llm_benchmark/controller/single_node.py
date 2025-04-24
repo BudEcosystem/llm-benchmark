@@ -5,8 +5,12 @@ import subprocess
 from typing import Optional
 
 
+docker_flags_mapping = {"DOCKER_CPUSET_CPUS": "--cpuset-cpus"}
+
+
 def build_docker_run_command(
     docker_image: str,
+    run_command: Optional[str],
     env_values: list,
     result_dir: str,
     extra_args: list,
@@ -16,9 +20,19 @@ def build_docker_run_command(
 ) -> list:
     """Constructs the docker run command."""
 
-    env_vars = [f"-e {k}='{v}'" for k, v in env_values.items()] if env_values else []
+    env_vars = (
+        [f"-e {k}='{v}'" for k, v in env_values.items() if not k.startswith("DOCKER_")]
+        if env_values
+        else []
+    )
     env_vars.append(f"-e ENGINE_CONFIG_ID={engine_config_id}")
     env_vars.append("-e PROFILER_RESULT_DIR=/root/results/")
+
+    docker_flags = []
+    for flag, mapping in docker_flags_mapping.items():
+        if flag in env_values:
+            docker_flags.append(f"{mapping}={env_values[flag]}")
+
     if profile_model:
         env_vars.append("-e ENABLE_PROFILER=True")
 
@@ -46,6 +60,7 @@ def build_docker_run_command(
         "--shm-size=8G",
         "--privileged",
         "--network=host",
+        *docker_flags,
     ]
 
     if device == "gpu":
@@ -58,9 +73,13 @@ def build_docker_run_command(
             *env_vars,
             *volumes,
             docker_image,
-            *arg_vars,
         ]
     )
+
+    if run_command:
+        docker_command.append(run_command)
+
+    docker_command.extend(arg_vars)
 
     return docker_command
 
@@ -68,6 +87,7 @@ def build_docker_run_command(
 def deploy_model(
     engine: str,
     docker_image: str,
+    run_command: Optional[str],
     env_values: dict,
     result_dir: str,
     extra_args: list,
@@ -76,13 +96,15 @@ def deploy_model(
     warmup_sec: int = 30,
     device: str = "cpu",
     profile_model: bool = False,
+    health_check_endpoint: Optional[str] = None,
 ) -> str:
     container_id = None
     try:
         if engine == "litellm_proxy":
-            extra_args.pop('model')
+            extra_args.pop("model")
         docker_command = build_docker_run_command(
             docker_image,
+            run_command,
             env_values,
             result_dir,
             extra_args,
@@ -113,7 +135,13 @@ def deploy_model(
         # Wait for the container to initialize
         time.sleep(warmup_sec)
 
-        if not verify_server_status(engine, container_id, f"http://localhost:{port}/v1", env_values=env_values):
+        if not verify_server_status(
+            engine,
+            container_id,
+            f"http://localhost:{port}",
+            health_check_endpoint,
+            env_values=env_values,
+        ):
             raise RuntimeError("Server failed to start after maximum retries.")
 
         print(f"Container {container_id} is now running.")
@@ -152,17 +180,29 @@ def verify_container_status(container_id: str):
             print(f"Container {container_id} is not running.")
         return is_running
     except subprocess.CalledProcessError as e:
-        print(f"Failed to check status of container {container_id}. Docker error: {e.stderr}")
+        print(
+            f"Failed to check status of container {container_id}. Docker error: {e.stderr}"
+        )
         raise
 
 
 def verify_server_status(
-    engine: str, container_id: str, base_url: str, max_retries: int = 100, retry_interval: int = 60, env_values: Optional[dict] = None
+    engine: str,
+    container_id: str,
+    base_url: str,
+    health_check_endpoint: Optional[str] = None,
+    max_retries: int = 100,
+    retry_interval: int = 60,
+    env_values: Optional[dict] = None,
 ) -> bool:
     """Verifies if the server is up and running by checking the API status."""
-    url = f"{base_url}/models"
+    url = (
+        f"{base_url}/v1/models"
+        if not health_check_endpoint
+        else f"{base_url}{health_check_endpoint}"
+    )
     headers = None
-    
+
     if engine == "litellm_proxy":
         if base_url.endswith("/v1"):
             base_url = base_url[:-3]

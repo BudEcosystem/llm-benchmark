@@ -8,7 +8,7 @@ class BenchmarkResultSchema(BaseModel):
     duration: float
     successful_requests: int
     input_tokens: int
-    output_tokens: int
+    output_tokens: Optional[int] = None
     total_input_tokens: Optional[int] = 0
     total_output_tokens: Optional[int] = 0
     request_throughput: Optional[float] = None
