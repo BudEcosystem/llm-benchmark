@@ -34,31 +34,34 @@ def create_summary(results, results_dir, profiler_result: bool = False):
 
     for result in results:
         summary = {}
-        summary["Engine"] = result["engine"]
+        summary["engine"] = result["engine"]
         summary["engine_config_id"] = result["engine_config_id"]
         summary["run_id"] = result["run_id"]
-        summary["Model"] = result["model"]
-        summary["Mean Input Tokens"] = result["input_tokens"]
-        summary["Mean Output Tokens"] = result["output_tokens"]
-        summary["Concurrent Requests"] = result["concurrency"]
-        summary["Completed Requests"] = result["successful_requests"]
-        summary["Duration (s)"] = round(result["duration"], 2)
-        summary["Request Throughput (req/min)"] = round(
-            result.get("request_throughput", 0), 2
-        )
-        summary["Output Token Throughput (tok/s)"] = round(
-            result.get("output_throughput") or 0, 2
-        )
-        summary["Output Token Throughput per User (tok/s)"] = round(
-            result.get("output_throughput_per_user") or 0, 2
-        )
-        summary["Mean End to End Latency (ms)"] = round(
-            result["mean_e2el_ms"] or 0, 2
-        )
-        summary["Mean TTFT (ms)"] = round(result.get("mean_ttft_ms") or 0, 2)
-        summary["P95 TTFT (ms)"] = round(result.get("p95_ttft_ms") or 0, 2)
-        summary["Mean Inter Token Latency (ms)"] = round(result.get("mean_itl_ms") or 0, 2)
-        summary["P95 Inter Token Latency (ms)"] = round(result.get("p95_itl_ms") or 0, 2)
+        summary["status"] = result["status"]
+        # summary["Model"] = result["model"]
+        # summary["Mean Input Tokens"] = result["input_tokens"]
+        # summary["Mean Output Tokens"] = result["output_tokens"]
+        # summary["Concurrent Requests"] = result["concurrency"]
+        # summary["Completed Requests"] = result.get("successful_requests", 0)
+        # summary["Duration (s)"] = round(result.get("duration", 0), 2)
+        # summary["Request Throughput (req/min)"] = round(
+        #     result.get("request_throughput", 0), 2
+        # )
+        # summary["Output Token Throughput (tok/s)"] = round(
+        #     result.get("output_throughput", 0) or 0, 2
+        # )
+        # summary["Output Token Throughput per User (tok/s)"] = round(
+        #     result.get("output_throughput_per_user", 0) or 0, 2
+        # )
+        # summary["Mean End to End Latency (ms)"] = round(
+        #     result.get("mean_e2el_ms", 0) or 0, 2
+        # )
+        # summary["Mean TTFT (ms)"] = round(result.get("mean_ttft_ms", 0) or 0, 2)
+        # summary["P95 TTFT (ms)"] = round(result.get("p95_ttft_ms", 0) or 0, 2)
+        # summary["Mean Inter Token Latency (ms)"] = round(result.get("mean_itl_ms", 0) or 0, 2)
+        # summary["P95 Inter Token Latency (ms)"] = round(result.get("p95_itl_ms", 0) or 0, 2)
+        
+        summary = { **summary, **result }
 
         if profiler_result:
             for layer in layers:
@@ -109,25 +112,6 @@ def create_summary(results, results_dir, profiler_result: bool = False):
 
 
 def format_vllm_result(result):
-    # formatted_result = {}
-    # formatted_result["model"] = result["model_id"]
-    # formatted_result["concurrency"] = result["concurrency"]
-    # formatted_result["input_tokens"] = result["input_tokens"]
-    # formatted_result["output_tokens"] = result["output_tokens"]
-    # formatted_result["total_input_tokens"] = result["total_input_tokens"]
-    # formatted_result["total_output_tokens"] = result["total_output_tokens"]
-    # formatted_result["completed"] = result["completed"]
-    # formatted_result["request_throughput"] = result["request_throughput"]
-    # formatted_result["output_throughput"] = result["output_throughput"]
-    # formatted_result["total_token_throughput"] = result["total_token_throughput"]
-    # formatted_result["output_throughput_per_user"] = result["mean_output_throughput_per_user"]
-    # formatted_result["mean_end_to_end_latency"] = result["mean_e2el_ms"]
-    # formatted_result["mean_ttft_ms"] = result["mean_ttft_ms"]
-    # formatted_result["p95_ttft_ms"] = result["p95_ttft_ms"]
-    # formatted_result["mean_tpot_ms"] = result["mean_tpot_ms"]
-    # formatted_result["p95_tpot_ms"] = result["p95_tpot_ms"]
-    # formatted_result["mean_itl_ms"] = result["mean_itl_ms"]
-    # formatted_result["p95_itl_ms"] = result["p95_itl_ms"]
     
     benchmark_result = BenchmarkResultSchema(
         model=result["model_id"],
@@ -141,43 +125,43 @@ def format_vllm_result(result):
         request_throughput=result["request_throughput"],
         input_throughput=result["input_throughput"],
         output_throughput=result["output_throughput"],
-        output_throughput_per_user=result["output_throughput_per_user"],
-        p25_throughput=result["percentiles_output_throughput_per_user"][0],
-        p75_throughput=result["percentiles_output_throughput_per_user"][1],
-        p95_throughput=result["percentiles_output_throughput_per_user"][2],
-        p99_throughput=result["percentiles_output_throughput_per_user"][3],
-        min_throughput=result["min_output_throughput"],
-        max_throughput=result["max_output_throughput"],
+        mean_output_throughput_per_user=result["mean_output_throughput_per_user"],
+        p25_output_throughput_per_user=result["p25_output_throughput_per_user"],
+        p75_output_throughput_per_user=result["p75_output_throughput_per_user"],
+        p95_output_throughput_per_user=result["p95_output_throughput_per_user"],
+        p99_output_throughput_per_user=result["p99_output_throughput_per_user"],
+        min_output_throughput_per_user=result["min_output_throughput_per_user"],
+        max_output_throughput_per_user=result["max_output_throughput_per_user"],
         mean_ttft_ms=result["mean_ttft_ms"],
         median_ttft_ms=result["median_ttft_ms"],
-        p25_ttft_ms=result["percentiles_ttft_ms"][0],
-        p75_ttft_ms=result["percentiles_ttft_ms"][1],
-        p95_ttft_ms=result["percentiles_ttft_ms"][2],
-        p99_ttft_ms=result["percentiles_ttft_ms"][3],
+        p25_ttft_ms=result["p25_ttft_ms"],
+        p75_ttft_ms=result["p75_ttft_ms"],
+        p95_ttft_ms=result["p95_ttft_ms"],
+        p99_ttft_ms=result["p99_ttft_ms"],
         min_ttft_ms=result["min_ttft_ms"],
         max_ttft_ms=result["max_ttft_ms"],
         mean_tpot_ms=result["mean_tpot_ms"],
         median_tpot_ms=result["median_tpot_ms"],
-        p25_tpot_ms=result["percentiles_tpot_ms"][0],
-        p75_tpot_ms=result["percentiles_tpot_ms"][1],
-        p95_tpot_ms=result["percentiles_tpot_ms"][2],
-        p99_tpot_ms=result["percentiles_tpot_ms"][3],
+        p25_tpot_ms=result["p25_tpot_ms"],
+        p75_tpot_ms=result["p75_tpot_ms"],
+        p95_tpot_ms=result["p95_tpot_ms"],
+        p99_tpot_ms=result["p99_tpot_ms"],
         min_tpot_ms=result["min_tpot_ms"],
         max_tpot_ms=result["max_tpot_ms"],
         mean_itl_ms=result["mean_itl_ms"],
         median_itl_ms=result["median_itl_ms"],
-        p25_itl_ms=result["percentiles_itl_ms"][0],
-        p75_itl_ms=result["percentiles_itl_ms"][1],
-        p95_itl_ms=result["percentiles_itl_ms"][2],
-        p99_itl_ms=result["percentiles_itl_ms"][3],
+        p25_itl_ms=result["p25_itl_ms"],
+        p75_itl_ms=result["p75_itl_ms"],
+        p95_itl_ms=result["p95_itl_ms"],
+        p99_itl_ms=result["p99_itl_ms"],
         min_itl_ms=result["min_itl_ms"],
         max_itl_ms=result["max_itl_ms"],
         mean_e2el_ms=result["mean_e2el_ms"],
         median_e2el_ms=result["median_e2el_ms"],
-        p25_e2el_ms=result["percentiles_e2el_ms"][0],
-        p75_e2el_ms=result["percentiles_e2el_ms"][1],
-        p95_e2el_ms=result["percentiles_e2el_ms"][2],
-        p99_e2el_ms=result["percentiles_e2el_ms"][3],
+        p25_e2el_ms=result["p25_e2el_ms"],
+        p75_e2el_ms=result["p75_e2el_ms"],
+        p95_e2el_ms=result["p95_e2el_ms"],
+        p99_e2el_ms=result["p99_e2el_ms"],
         min_e2el_ms=result["min_e2el_ms"],
         max_e2el_ms=result["max_e2el_ms"],
         error_messages=result["errors"],
@@ -200,13 +184,13 @@ def format_llmperf_result(result):
         request_throughput=num_requests_completed_per_min,
         input_throughput=result["results"]["number_input_tokens"]["mean"]*num_requests_completed_per_min,
         output_throughput=result["results"]["mean_output_throughput_token_per_s"],
-        output_throughput_per_user=result["results"]["request_output_throughput_token_per_s"]["mean"],
-        p25_throughput=result["results"]["request_output_throughput_token_per_s"]["quantiles"]["p25"],
-        p75_throughput=result["results"]["request_output_throughput_token_per_s"]["quantiles"]["p75"],
-        p95_throughput=result["results"]["request_output_throughput_token_per_s"]["quantiles"]["p95"],
-        p99_throughput=result["results"]["request_output_throughput_token_per_s"]["quantiles"]["p99"],
-        min_throughput=result["results"]["request_output_throughput_token_per_s"]["min"],
-        max_throughput=result["results"]["request_output_throughput_token_per_s"]["max"],
+        mean_output_throughput_per_user=result["results"]["request_output_throughput_token_per_s"]["mean"],
+        p25_output_throughput_per_user=result["results"]["request_output_throughput_token_per_s"]["quantiles"]["p25"],
+        p75_output_throughput_per_user=result["results"]["request_output_throughput_token_per_s"]["quantiles"]["p75"],
+        p95_output_throughput_per_user=result["results"]["request_output_throughput_token_per_s"]["quantiles"]["p95"],
+        p99_output_throughput_per_user=result["results"]["request_output_throughput_token_per_s"]["quantiles"]["p99"],
+        min_output_throughput_per_user=result["results"]["request_output_throughput_token_per_s"]["min"],
+        max_output_throughput_per_user=result["results"]["request_output_throughput_token_per_s"]["max"],
         mean_ttft_ms=result["results"]["ttft_s"]["mean"]*1000,
         median_ttft_ms=result["results"]["ttft_s"]["median"]*1000,
         p25_ttft_ms=result["results"]["ttft_s"]["quantiles"]["p25"]*1000,

@@ -70,8 +70,8 @@ class BenchmarkMetrics:
     median_output_throughput_per_user: float
     std_output_throughput_per_user: float
     percentiles_output_throughput_per_user: List[Tuple[float, float]]
-    min_output_throughtput: float
-    max_output_throughtput: float
+    min_output_throughput_per_user: float
+    max_output_throughput_per_user: float
     mean_ttft_ms: float
     median_ttft_ms: float
     std_ttft_ms: float
@@ -430,8 +430,8 @@ def calculate_metrics(
         percentiles_output_throughput_per_user=[
             (p, np.percentile(reqs_output_throughputs or 0, p)) for p in selected_percentiles
         ],
-        min_output_throughtput=np.min(reqs_output_throughputs or [0]),
-        max_output_throughtput=np.max(reqs_output_throughputs or [0]),
+        min_output_throughput_per_user=np.min(reqs_output_throughputs or [0]),
+        max_output_throughput_per_user=np.max(reqs_output_throughputs or [0]),
         mean_ttft_ms=np.mean(ttfts or 0)
         * 1000,  # ttfts is empty if streaming is not supported by backend
         std_ttft_ms=np.std(ttfts or 0) * 1000,
@@ -839,7 +839,7 @@ def main(args: argparse.Namespace):
     result_json["num_prompts"] = args.num_prompts
     result_json["input_tokens"] = args.random_input_len
     result_json["output_tokens"] = args.random_output_len
-    result_json["concurrency"] = args.num_of_prompts
+    result_json["concurrency"] = args.num_prompts
 
     # Metadata
     if args.metadata:

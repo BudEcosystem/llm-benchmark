@@ -325,6 +325,19 @@ def run_benchmark(args, engine_config, run_config, extras=None, checkpoint=None)
             log_metrics_task.start()
 
             try:
+                if args.engine != "litellm_proxy":
+                    _ = model_tools.infer(
+                        model_name=model,
+                        device_config=device_config,
+                        seq_len=config["input_tokens"],
+                        num_tokens_to_generate=config["output_tokens"],
+                        batch_size_per_gpu=config["concurrency"],
+                        tp_size=engine_config["args"].get("tensor-parallel-size", 1),
+                        output_dir=os.environ["PROFILER_RESULT_DIR"],
+                        run_id=run_id,
+                        log_level="ERROR",
+                    )
+                
                 result = benchmark_tools.run_benchmark(
                     model,
                     base_url,
@@ -345,26 +358,25 @@ def run_benchmark(args, engine_config, run_config, extras=None, checkpoint=None)
                 result["output_tokens"] = config["output_tokens"]
                 result["concurrency"] = config["concurrency"]
 
-                if args.engine != "litellm_proxy":
-                    _ = model_tools.infer(
-                        model_name=model,
-                        device_config=device_config,
-                        seq_len=config["input_tokens"],
-                        num_tokens_to_generate=config["output_tokens"],
-                        batch_size_per_gpu=config["concurrency"],
-                        tp_size=engine_config["args"].get("tensor-parallel-size", 1),
-                        output_dir=os.environ["PROFILER_RESULT_DIR"],
-                        run_id=run_id,
-                        log_level="ERROR",
-                    )
-
+                result["status"] = "success"
                 results.append(result)
-            except ValueError as e:
+            except Exception as e:
                 print(f"Error during {engine_config_id}:{run_id} benchmark: {e}")
                 checkpoint[engine_config_hash]["runs"][run_config_hash]["status"] = (
                     "benchmark_failed"
                 )
-                continue
+                result = {
+                    "model": model,
+                    "engine": args.engine,
+                    "engine_config_id": engine_config_id,
+                    "run_id": run_id,
+                    "input_tokens": config["input_tokens"],
+                    "output_tokens": config["output_tokens"],
+                    "concurrency": config["concurrency"],
+                    "status": "benchmark_failed",
+                }
+                results.append(result)
+                # continue
             finally:
                 time.sleep(1)
 
@@ -379,9 +391,9 @@ def run_benchmark(args, engine_config, run_config, extras=None, checkpoint=None)
                 profiler_result=args.profile_model,
             )
             print(result)
-            checkpoint[engine_config_hash]["runs"][run_config_hash]["status"] = (
-                "success"
-            )
+            checkpoint[engine_config_hash]["runs"][run_config_hash]["status"] = result[
+                "status"
+            ]
     except Exception as e:
         print(f"Error during {engine_config_id} benchmark: {e}")
         print("Stacktrace:")
@@ -389,6 +401,23 @@ def run_benchmark(args, engine_config, run_config, extras=None, checkpoint=None)
         checkpoint[engine_config_hash]["runs"][run_config_hash]["status"] = (
             "benchmark_failed"
         )
+        result = {
+            "model": model,
+            "engine": args.engine,
+            "engine_config_id": engine_config_id,
+            "run_id": run_id,
+            "input_tokens": config["input_tokens"],
+            "output_tokens": config["output_tokens"],
+            "concurrency": config["concurrency"],
+            "status": "benchmark_failed",
+        }
+        
+        benchmark_tools.create_summary(
+            [result],
+            os.environ["PROFILER_RESULT_DIR"],
+            profiler_result=args.profile_model,
+        )
+        print(result)
     finally:
         if container_id:
             single_node_controller.remove_container(container_id)
