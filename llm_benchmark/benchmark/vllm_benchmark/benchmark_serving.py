@@ -33,6 +33,7 @@ import warnings
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
+from uuid import UUID
 
 from datasets import load_dataset
 
@@ -331,22 +332,23 @@ def sample_random_requests(
         prompt = tokenizer.decode(
             [(offsets[i] + i + j) % tokenizer.vocab_size for j in range(input_lens[i])]
         )
-        input_requests.append((prompt, int(input_lens[i]), int(output_lens[i])))
+        input_requests.append((prompt, int(input_lens[i]), int(output_lens[i]), None))
 
-    return input_requests   
+    return input_requests
 
 
-def transform_sampled_prompts(sampled_prompts: List[dict], tokenizer: PreTrainedTokenizerBase, fixed_output_len: Optional[int]=100) -> List[Tuple[str, int, int]]:
+def transform_sampled_prompts(sampled_prompts: dict, tokenizer: PreTrainedTokenizerBase, fixed_output_len: Optional[int]=100) -> List[Tuple[str, int, int]]:
     filtered_prompts = []
-    random.shuffle(sampled_prompts)
-    for each in sampled_prompts:
-        prompt = each["prompt"]
-        completion = each["response"]
-        prompt_token_ids = tokenizer(prompt).input_ids
-        prompt_len = len(prompt_token_ids)
-        completion_token_ids = tokenizer(completion).input_ids
-        output_len = len(completion_token_ids) if fixed_output_len is None else fixed_output_len
-        filtered_prompts.append((prompt, prompt_len, output_len))
+    for dataset_id, value in sampled_prompts.items():
+        random.shuffle(value)
+        for each in value:
+            prompt = each["prompt"]
+            completion = each["response"]
+            prompt_token_ids = tokenizer(prompt).input_ids
+            prompt_len = len(prompt_token_ids)
+            completion_token_ids = tokenizer(completion).input_ids
+            output_len = len(completion_token_ids) if fixed_output_len is None else fixed_output_len
+            filtered_prompts.append((prompt, prompt_len, output_len, dataset_id))
     return filtered_prompts
 
 async def get_request(
@@ -394,6 +396,7 @@ def calculate_metrics(
                 tokenizer(outputs[i].generated_text, add_special_tokens=False).input_ids
             )
             actual_output_lens.append(output_len)
+            outputs[i].output_len = output_len
             total_input += input_requests[i][1]
             if output_len > 1:
                 tpots.append((outputs[i].latency - outputs[i].ttft) / (output_len - 1))
@@ -466,7 +469,7 @@ def calculate_metrics(
         min_e2el_ms=np.min(e2els or [0]) * 1000,
         max_e2el_ms=np.max(e2els or [0]) * 1000,
     )
-    return metrics, actual_output_lens
+    return metrics, outputs
 
 
 async def benchmark(
@@ -475,13 +478,14 @@ async def benchmark(
     base_url: str,
     model_id: str,
     tokenizer: PreTrainedTokenizerBase,
-    input_requests: List[Tuple[str, int, int]],
+    input_requests: List[Tuple[str, int, int, Optional[str]]],
     best_of: int,
     use_beam_search: bool,
     request_rate: float,
     disable_tqdm: bool,
     profile: bool,
     selected_percentiles: List[str],
+    benchmark_id: Optional[UUID] = None,
 ):
     if backend in ASYNC_REQUEST_FUNCS:
         request_func = ASYNC_REQUEST_FUNCS[backend]
@@ -489,7 +493,7 @@ async def benchmark(
         raise ValueError(f"Unknown backend: {backend}")
 
     print("Starting initial single prompt test run...")
-    test_prompt, test_prompt_len, test_output_len = input_requests[0]
+    test_prompt, test_prompt_len, test_output_len, dataset_id = input_requests[0]
     test_input = RequestFuncInput(
         model=model_id,
         prompt=test_prompt,
@@ -531,7 +535,7 @@ async def benchmark(
     benchmark_start_time = time.perf_counter()
     tasks: List[asyncio.Task] = []
     async for request in get_request(input_requests, request_rate):
-        prompt, prompt_len, output_len = request
+        prompt, prompt_len, output_len, dataset_id = request
         request_func_input = RequestFuncInput(
             model=model_id,
             prompt=prompt,
@@ -540,6 +544,8 @@ async def benchmark(
             output_len=output_len,
             best_of=best_of,
             use_beam_search=use_beam_search,
+            dataset_id=dataset_id,
+            benchmark_id=benchmark_id,
         )
         tasks.append(
             asyncio.create_task(
@@ -568,7 +574,7 @@ async def benchmark(
 
     benchmark_duration = time.perf_counter() - benchmark_start_time
 
-    metrics, actual_output_lens = calculate_metrics(
+    metrics, outputs = calculate_metrics(
         input_requests=input_requests,
         outputs=outputs,
         dur_s=benchmark_duration,
@@ -607,8 +613,8 @@ async def benchmark(
         "output_throughput_per_user":[output.req_output_throughput for output in outputs],
         # "total_token_throughput": metrics.total_token_throughput,
         "input_lens": [output.prompt_len for output in outputs],
-        "output_lens": actual_output_lens,
-        "e2els":[ output.latency for output in outputs],
+        "output_lens": [output.output_len for output in outputs],
+        "e2els": [output.latency for output in outputs],
         "ttfts": [output.ttft for output in outputs],
         "itls": [output.itl for output in outputs],
         "generated_texts": [output.generated_text for output in outputs],
@@ -690,7 +696,7 @@ async def benchmark(
 
     print("=" * 50)
 
-    return result
+    return result, outputs
 
 
 def main(args: argparse.Namespace):
@@ -701,6 +707,7 @@ def main(args: argparse.Namespace):
     model_id = args.model
     tokenizer_id = args.tokenizer if args.tokenizer is not None else args.model
     sampled_prompts = args.sampled_prompts
+    benchmark_id = args.benchmark_id
 
     if args.base_url is not None:
         api_url = f"{args.base_url}{args.endpoint}"
@@ -809,7 +816,7 @@ def main(args: argparse.Namespace):
     else:
         raise ValueError(f"Unknown dataset: {args.dataset_name}")
 
-    benchmark_result = asyncio.run(
+    benchmark_result, individual_responses = asyncio.run(
         benchmark(
             backend=backend,
             api_url=api_url,
@@ -823,6 +830,7 @@ def main(args: argparse.Namespace):
             disable_tqdm=args.disable_tqdm,
             profile=args.profile,
             selected_percentiles=[float(p) for p in args.metric_percentiles.split(",")],
+            benchmark_id=benchmark_id,
         )
     )
 
@@ -873,7 +881,7 @@ def main(args: argparse.Namespace):
         with open(file_name, "w") as outfile:
             json.dump(result_json, outfile)
 
-    return result_json
+    return result_json, individual_responses
 
 
 def get_args():
@@ -1078,17 +1086,23 @@ def get_args():
         default=[],
         help="Provide a list of sampled prompts as JSON string (Example: '[{\"id\": 1, \"prompt\": \"Q1\", \"response\": \"A1\"}]')"
     )
+    parser.add_argument(
+        "--benchmark_id",
+        type=str,
+        default=None,
+        help="UUID of the benchmark run. If not provided, will be set to None."
+    )
     args = parser.parse_args()
 
     return args
 
 
-def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[list] = None):
+def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[dict] = None, benchmark_id: Optional[UUID] = None):
     # args = get_args()
     class BenchmarkArgs:
-        def __init__(self, model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[list] = None):
+        def __init__(self, model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[dict] = None, benchmark_id: Optional[UUID] = None):
             self.model = model
-            self.tokenizer = model
+            self.tokenizer = "Qwen/Qwen2.5-0.5B-Instruct"
             self.num_prompts = num_prompts
             self.seed = 42
             self.disable_tqdm = False
@@ -1121,8 +1135,9 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_p
             self.result_dir = "./results"
             self.result_filename = None
             self.sampled_prompts = sampled_prompts
+            self.benchmark_id = benchmark_id
 
-    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url, sampled_prompts)
+    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url, sampled_prompts, benchmark_id)
 
     return main(args)
 
