@@ -4,10 +4,14 @@ from uuid import UUID
 
 class BenchmarkResultSchema(BaseModel):
     model: str
-    concurrency: int
-    duration: float
-    successful_requests: int
-    input_tokens: int
+    engine: Optional[str] = None
+    engine_config_id: Optional[str] = None
+    run_id: Optional[str] = None
+    status: Optional[str] = None
+    concurrency: Optional[int] = None
+    duration: Optional[float] = None
+    successful_requests: Optional[int] = None
+    input_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
     total_input_tokens: Optional[int] = 0
     total_output_tokens: Optional[int] = 0

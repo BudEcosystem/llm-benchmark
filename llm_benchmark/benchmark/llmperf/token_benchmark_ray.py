@@ -13,12 +13,13 @@ import pandas as pd
 import ray
 
 from .patch import construct_clients
+from .requests_launcher import RequestsLauncher
 
 from llmperf import common_metrics
 from llmperf.common import SUPPORTED_APIS
 
 from llmperf.models import RequestConfig
-from llmperf.requests_launcher import RequestsLauncher
+
 
 from .utils import (
     LLMPerfResults,
@@ -110,7 +111,7 @@ def get_token_throughput_latencies(
             sampling_params=default_sampling_params,
             llm_api=llm_api,
         )
-        req_launcher.launch_requests(request_config)
+        req_launcher.launch_requests(request_config, delay=0.1)
         # Retrieving results less frequently allows for more concurrent requests
         # to be launched. This will overall reduce the amount of time it takes
         # for the test to run.

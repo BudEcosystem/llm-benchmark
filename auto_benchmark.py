@@ -15,6 +15,7 @@ from pathlib import Path
 from copy import deepcopy
 from datetime import datetime
 
+from llm_benchmark.benchmark.schemas import BenchmarkResultSchema
 from llm_benchmark.controller import single_node as single_node_controller
 from llm_benchmark.benchmark import tools as benchmark_tools
 from llm_benchmark.profiler import tools as profiler_tools
@@ -43,6 +44,26 @@ def create_config(run_config):
                     "concurrency": concurrency,
                 }
                 configs.append(config)
+        return configs
+    
+    if "token_ranges" in run_config:
+        input_token_ranges = run_config["token_ranges"]["input_ranges"]
+        output_token_ranges = run_config["token_ranges"]["output_ranges"]
+        for input_token_range in input_token_ranges:
+            input_token_range = list(map(int, input_token_range.split("-")))
+            for output_token_range in output_token_ranges:
+                output_token_range = list(map(int, output_token_range.split("-")))
+                for concurrency in concurrencies:
+                    config = {
+                        "input_tokens": round((input_token_range[0] + input_token_range[1])/2),
+                        "output_tokens": round((output_token_range[0] + output_token_range[1])/2),
+                        "min_input_tokens": input_token_range[0],
+                        "max_input_tokens": input_token_range[1],
+                        "min_output_tokens": output_token_range[0],
+                        "max_output_tokens": output_token_range[1],
+                        "concurrency": concurrency,
+                    }
+                    configs.append(config)
         return configs
 
     input_tokens = (
@@ -349,6 +370,10 @@ def run_benchmark(args, engine_config, run_config, extras=None, checkpoint=None)
                     run_id,
                     env_values=engine_config["envs"] if engine_config else None,
                     latency_factors=latency_factors,
+                    min_input_tokens=config.get("min_input_tokens", None),
+                    max_input_tokens=config.get("max_input_tokens", None),
+                    min_output_tokens=config.get("min_output_tokens", None),
+                    max_output_tokens=config.get("max_output_tokens", None),
                 )
 
                 result["engine"] = args.engine
@@ -357,6 +382,12 @@ def run_benchmark(args, engine_config, run_config, extras=None, checkpoint=None)
                 result["input_tokens"] = config["input_tokens"]
                 result["output_tokens"] = config["output_tokens"]
                 result["concurrency"] = config["concurrency"]
+                
+                if config.get("min_input_tokens", None) is not None:
+                    result["min_input_tokens"] = config["min_input_tokens"]
+                    result["max_input_tokens"] = config["max_input_tokens"]
+                    result["min_output_tokens"] = config["min_output_tokens"]
+                    result["max_output_tokens"] = config["max_output_tokens"]
 
                 result["status"] = "success"
                 results.append(result)
@@ -365,16 +396,32 @@ def run_benchmark(args, engine_config, run_config, extras=None, checkpoint=None)
                 checkpoint[engine_config_hash]["runs"][run_config_hash]["status"] = (
                     "benchmark_failed"
                 )
-                result = {
-                    "model": model,
-                    "engine": args.engine,
-                    "engine_config_id": engine_config_id,
-                    "run_id": run_id,
-                    "input_tokens": config["input_tokens"],
-                    "output_tokens": config["output_tokens"],
-                    "concurrency": config["concurrency"],
-                    "status": "benchmark_failed",
-                }
+                # result = {
+                #     "model": model,
+                #     "engine": args.engine,
+                #     "engine_config_id": engine_config_id,
+                #     "run_id": run_id,
+                #     "input_tokens": config["input_tokens"],
+                #     "output_tokens": config["output_tokens"],
+                #     "concurrency": config["concurrency"],
+                #     "status": "benchmark_failed",
+                # }
+                result = BenchmarkResultSchema(
+                    model=model,
+                    engine=args.engine,
+                    engine_config_id=engine_config_id,
+                    run_id=run_id,
+                    status="benchmark_failed",
+                    concurrency=config["concurrency"],
+                    duration=0,
+                    successful_requests=0,
+                    input_tokens=config["input_tokens"],
+                    output_tokens=config["output_tokens"],
+                    
+                )
+                # Convert BenchmarkResultSchema to dict to make it subscriptable
+                # This matches the approach used earlier in the success case
+                result = result.model_dump()
                 results.append(result)
                 # continue
             finally:

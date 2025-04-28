@@ -39,29 +39,11 @@ def create_summary(results, results_dir, profiler_result: bool = False):
         summary["engine_config_id"] = result["engine_config_id"]
         summary["run_id"] = result["run_id"]
         summary["status"] = result["status"]
-        # summary["Model"] = result["model"]
-        # summary["Mean Input Tokens"] = result["input_tokens"]
-        # summary["Mean Output Tokens"] = result["output_tokens"]
-        # summary["Concurrent Requests"] = result["concurrency"]
-        # summary["Completed Requests"] = result.get("successful_requests", 0)
-        # summary["Duration (s)"] = round(result.get("duration", 0), 2)
-        # summary["Request Throughput (req/min)"] = round(
-        #     result.get("request_throughput", 0), 2
-        # )
-        # summary["Output Token Throughput (tok/s)"] = round(
-        #     result.get("output_throughput", 0) or 0, 2
-        # )
-        # summary["Output Token Throughput per User (tok/s)"] = round(
-        #     result.get("output_throughput_per_user", 0) or 0, 2
-        # )
-        # summary["Mean End to End Latency (ms)"] = round(
-        #     result.get("mean_e2el_ms", 0) or 0, 2
-        # )
-        # summary["Mean TTFT (ms)"] = round(result.get("mean_ttft_ms", 0) or 0, 2)
-        # summary["P95 TTFT (ms)"] = round(result.get("p95_ttft_ms", 0) or 0, 2)
-        # summary["Mean Inter Token Latency (ms)"] = round(result.get("mean_itl_ms", 0) or 0, 2)
-        # summary["P95 Inter Token Latency (ms)"] = round(result.get("p95_itl_ms", 0) or 0, 2)
-        
+
+        if "error_messages" in result:
+            result.pop("error_messages")
+        if "individual_responses" in result:
+            result.pop("individual_responses")
         summary = { **summary, **result }
 
         if profiler_result:
@@ -277,11 +259,11 @@ def run_benchmark(
     datasets: Optional[list] = None,
     benchmark_id: Optional[UUID] = None,
     seed: Optional[int] = None,
+    min_input_tokens: Optional[int] = None,
+    max_input_tokens: Optional[int] = None,
+    min_output_tokens: Optional[int] = None,
+    max_output_tokens: Optional[int] = None,
 ):
-    # Set environment variables directly
-    # TODO: Removed it because litellm_proxy requires actual api key
-    # and this was overriding the one in the envs
-    # If required to set for other engines, can be set as env
     if benchmark_script != "litellm_proxy":
         os.environ["OPENAI_API_KEY"] = "secret_abcdefg"
         os.environ["OPENAI_API_BASE"] = base_url
@@ -289,7 +271,7 @@ def run_benchmark(
     sampled_prompts = combine_multiple_datasets(
         concurrency,
         seed,
-        datasets,
+        datasets
     )
 
     if result_dir is not None:
@@ -317,11 +299,13 @@ def run_benchmark(
         result_output, individual_responses = vllm_run_benchmark(
             model, input_token, output_token, concurrency, base_url, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id
         )
-        print(f"local model result_output: {result_output}" )
+        # print(f"local model result_output: {result_output}" )
         result_output, individual_responses = format_vllm_result(result_output, individual_responses)
     elif benchmark_script == "llmperf":
+        input_deviation = (max_input_tokens - min_input_tokens)/2 if max_input_tokens is not None and min_input_tokens is not None else 0
+        output_deviation = (max_output_tokens - min_output_tokens)/2 if max_output_tokens is not None and min_output_tokens is not None else 0
         result_output, individual_responses = llmperf_run_benchmark(
-            model, concurrency, concurrency, input_token, 0, output_token, 0, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id
+            model, concurrency, concurrency, input_token, input_deviation, output_token, output_deviation, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id
         )
         result_output, individual_responses = format_llmperf_result(result_output, individual_responses)
     elif benchmark_script == "budlatent":
