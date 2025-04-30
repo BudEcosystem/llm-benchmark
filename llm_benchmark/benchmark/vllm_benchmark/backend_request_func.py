@@ -5,6 +5,7 @@ import time
 import traceback
 from dataclasses import dataclass, field
 from typing import List, Optional, Union
+from uuid import UUID
 
 import aiohttp
 import huggingface_hub.constants
@@ -24,6 +25,8 @@ class RequestFuncInput:
     model: str
     best_of: int = 1
     use_beam_search: bool = False
+    dataset_id: Optional[UUID] = None
+    benchmark_id: Optional[UUID] = None
 
 
 @dataclass
@@ -31,12 +34,16 @@ class RequestFuncOutput:
     generated_text: str = ""
     success: bool = False
     latency: float = 0.0
-    ttft: float = 0.0  # Time to first token
+    ttft: float = 0.0 # Time to first token
+    tpot: float = 0.0
     itl: List[float] = field(
         default_factory=list)  # List of inter-token latencies
     prompt_len: int = 0
     error: str = ""
     req_output_throughput : float = 0.0
+    dataset_id: Optional[UUID] = None
+    output_len: Optional[int] = 0
+    benchmark_id: Optional[UUID] = None
 
 
 async def async_request_tgi(
@@ -61,6 +68,8 @@ async def async_request_tgi(
         }
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
+        output.dataset_id = request_func_input.dataset_id
+        output.benchmark_id = request_func_input.benchmark_id
 
         ttft = 0.0
         st = time.perf_counter()
@@ -100,6 +109,8 @@ async def async_request_tgi(
                     output.latency = latency
                     output.success = True
                     output.generated_text = data["generated_text"]
+                    if token_count > 1:
+                        output.tpot = ((latency - ttft) / (token_count - 1))
                     output.req_output_throughput = token_count/latency
                      
                 else:
@@ -135,6 +146,8 @@ async def async_request_trt_llm(
         }
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
+        output.dataset_id = request_func_input.dataset_id
+        output.benchmark_id = request_func_input.benchmark_id
 
         ttft = 0.0
         st = time.perf_counter()
@@ -170,6 +183,8 @@ async def async_request_trt_llm(
                     latency = most_recent_timestamp - st
                     output.latency = latency
                     output.success = True
+                    if token_count > 1:
+                        output.tpot = ((latency - ttft) / (token_count - 1))
                     output.req_output_throughput = token_count/latency
 
                 else:
@@ -201,6 +216,8 @@ async def async_request_deepspeed_mii(
         }
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
+        output.dataset_id = request_func_input.dataset_id
+        output.benchmark_id = request_func_input.benchmark_id
 
         # NOTE: DeepSpeed-MII doesn't support streaming as of Jan 28 2024,
         # will use 0 as placeholder.
@@ -254,6 +271,8 @@ async def async_request_openai_completions(
 
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
+        output.dataset_id = request_func_input.dataset_id
+        output.benchmark_id = request_func_input.benchmark_id
 
         token_count = 0
         generated_text = ""
@@ -275,7 +294,7 @@ async def async_request_openai_completions(
                             latency = time.perf_counter() - st
                         else:
                             data = json.loads(chunk)
-                            print(data)
+                            # print(data)
                             # NOTE: Some completion API might have a last
                             # usage summary response without a token so we
                             # want to check a token was generated
@@ -298,6 +317,8 @@ async def async_request_openai_completions(
                     output.generated_text = generated_text
                     output.success = True
                     output.latency = latency
+                    if token_count > 1:
+                        output.tpot = ((latency - ttft) / (token_count - 1))
                     output.req_output_throughput = token_count/latency
                 else:
                     output.error = response.reason or ""
@@ -433,6 +454,8 @@ async def async_request_api_chat_completions(
 
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
+        output.dataset_id = request_func_input.dataset_id
+        output.benchmark_id = request_func_input.benchmark_id
 
         generated_text = ""
         ttft = 0.0
@@ -478,6 +501,8 @@ async def async_request_api_chat_completions(
                     output.generated_text = generated_text
                     output.success = True
                     output.latency = total_request_time
+                    if token_count > 1:
+                        output.tpot = ((latency - ttft) / (token_count - 1))
                     
                     output.req_output_throughput = token_count/latency
                 else:

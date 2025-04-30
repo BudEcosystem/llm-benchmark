@@ -26,7 +26,7 @@ class OpenAIChatCompletionsClient(LLMClient):
     def llm_request(self, request_config: RequestConfig) -> Dict[str, Any]:
         request_metadata = request_config.metadata if hasattr(request_config, 'metadata') else {}
         prompt = request_config.prompt
-        prompt, prompt_len = prompt
+        prompt, prompt_len, dataset_id = prompt
 
         message = [
             {"role": "system", "content": ""},
@@ -52,16 +52,17 @@ class OpenAIChatCompletionsClient(LLMClient):
         total_request_time = 0
 
         metrics = {}
+        metrics["dataset_id"] = dataset_id
 
         metrics[common_metrics.ERROR_CODE] = None
         metrics[common_metrics.ERROR_MSG] = ""
 
         start_time = time.monotonic()
         most_recent_received_token_time = time.monotonic()
-        address = os.environ.get("OPENAI_API_BASE") or request_metadata.get("api_base")
+        address = request_metadata.get("api_base") or os.environ.get("OPENAI_API_BASE")
         if not address:
             raise ValueError("the environment variable OPENAI_API_BASE must be set.")
-        key = os.environ.get("OPENAI_API_KEY") or request_metadata.get("api_key")
+        key = request_metadata.get("api_key") or os.environ.get("OPENAI_API_KEY")
         if not key:
             raise ValueError(f"the environment variable OPENAI_API_KEY must be set. {request_metadata}")
         headers = {"Authorization": f"Bearer {key}"}
@@ -120,7 +121,7 @@ class OpenAIChatCompletionsClient(LLMClient):
             print(f"Warning Or Error: {e}")
             print(error_response_code)
 
-        metrics[common_metrics.INTER_TOKEN_LAT] = sum(time_to_next_token) #This should be same as metrics[common_metrics.E2E_LAT]. Leave it here for now
+        metrics[common_metrics.INTER_TOKEN_LAT] = time_to_next_token #This should be same as metrics[common_metrics.E2E_LAT]. Leave it here for now
         metrics[common_metrics.TTFT] = ttft
         metrics[common_metrics.E2E_LAT] = total_request_time
         metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = output_throughput
@@ -141,7 +142,7 @@ class MockLiteLLMChatCompletionsClient(LLMClient):
             raise ValueError("the provider api_key must be set.")
 
         prompt = request_config.prompt
-        prompt, prompt_len = prompt
+        prompt, prompt_len, dataset_id = prompt
 
         message = [
             {"role": "system", "content": ""},
@@ -190,6 +191,7 @@ class MockLiteLLMChatCompletionsClient(LLMClient):
         total_request_time = 0
 
         metrics = {}
+        metrics["dataset_id"] = dataset_id
 
         metrics[common_metrics.ERROR_CODE] = None
         metrics[common_metrics.ERROR_MSG] = ""
@@ -260,7 +262,9 @@ class MockLiteLLMChatCompletionsClient(LLMClient):
             print(f"Warning Or Error: {e}")
             print(error_response_code)
 
-        metrics[common_metrics.INTER_TOKEN_LAT] = sum(time_to_next_token) #This should be same as metrics[common_metrics.E2E_LAT]. Leave it here for now
+        # metrics[common_metrics.INTER_TOKEN_LAT] = sum(time_to_next_token) #This should be same as metrics[common_metrics.E2E_LAT]. Leave it here for now
+        # instead of sum of itls keeping it as array
+        metrics[common_metrics.INTER_TOKEN_LAT] = time_to_next_token
         metrics[common_metrics.TTFT] = ttft
         metrics[common_metrics.E2E_LAT] = total_request_time
         metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = output_throughput
@@ -280,7 +284,7 @@ class LiteLLMChatCompletionsClient(LLMClient):
             raise ValueError("the provider api_key must be set.")
 
         prompt = request_config.prompt
-        prompt, prompt_len = prompt
+        prompt, prompt_len, dataset_id = prompt
 
         message = [
             {"role": "system", "content": ""},
@@ -315,6 +319,7 @@ class LiteLLMChatCompletionsClient(LLMClient):
         total_request_time = 0
 
         metrics = {}
+        metrics["dataset_id"] = dataset_id
 
         metrics[common_metrics.ERROR_CODE] = None
         metrics[common_metrics.ERROR_MSG] = ""
@@ -385,7 +390,7 @@ class LiteLLMChatCompletionsClient(LLMClient):
             print(f"Warning Or Error: {e}")
             print(error_response_code)
 
-        metrics[common_metrics.INTER_TOKEN_LAT] = sum(time_to_next_token) #This should be same as metrics[common_metrics.E2E_LAT]. Leave it here for now
+        metrics[common_metrics.INTER_TOKEN_LAT] = time_to_next_token #This should be same as metrics[common_metrics.E2E_LAT]. Leave it here for now
         metrics[common_metrics.TTFT] = ttft
         metrics[common_metrics.E2E_LAT] = total_request_time
         metrics[common_metrics.REQ_OUTPUT_THROUGHPUT] = output_throughput

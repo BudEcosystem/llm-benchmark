@@ -14,5 +14,9 @@ pyyaml
 numpy
 transformers
 pandas
-datasets
+datasets==3.3.2
 pyrsmi
+pyarrow
+modelscope==1.24.0
+addict
+locust

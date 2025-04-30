@@ -30,9 +30,10 @@ import os
 import random
 import time
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
+from uuid import UUID
 
 from datasets import load_dataset
 
@@ -62,6 +63,7 @@ class BenchmarkMetrics:
     total_input: int
     total_output: int
     request_throughput: float
+    input_throughput: float
     output_throughput: float
     total_token_throughput: float
     mean_request_throughput: float
@@ -69,18 +71,26 @@ class BenchmarkMetrics:
     median_output_throughput_per_user: float
     std_output_throughput_per_user: float
     percentiles_output_throughput_per_user: List[Tuple[float, float]]
+    min_output_throughput_per_user: float
+    max_output_throughput_per_user: float
     mean_ttft_ms: float
     median_ttft_ms: float
     std_ttft_ms: float
     percentiles_ttft_ms: List[Tuple[float, float]]
+    min_ttft_ms: float
+    max_ttft_ms: float
     mean_tpot_ms: float
     median_tpot_ms: float
     std_tpot_ms: float
     percentiles_tpot_ms: List[Tuple[float, float]]
+    min_tpot_ms: float
+    max_tpot_ms: float
     mean_itl_ms: float
     median_itl_ms: float
     std_itl_ms: float
     percentiles_itl_ms: List[Tuple[float, float]]
+    min_itl_ms: float
+    max_itl_ms: float
     # E2EL stands for end-to-end latency per request.
     # It is the time taken on the client side from sending
     # a request to receiving a complete response.
@@ -88,6 +98,8 @@ class BenchmarkMetrics:
     median_e2el_ms: float
     std_e2el_ms: float
     percentiles_e2el_ms: List[Tuple[float, float]]
+    min_e2el_ms: float
+    max_e2el_ms: float
 
 
 def sample_sharegpt_requests(
@@ -320,11 +332,24 @@ def sample_random_requests(
         prompt = tokenizer.decode(
             [(offsets[i] + i + j) % tokenizer.vocab_size for j in range(input_lens[i])]
         )
-        input_requests.append((prompt, int(input_lens[i]), int(output_lens[i])))
+        input_requests.append((prompt, int(input_lens[i]), int(output_lens[i]), None))
 
-    return input_requests   
+    return input_requests
 
 
+def transform_sampled_prompts(sampled_prompts: dict, tokenizer: PreTrainedTokenizerBase, fixed_output_len: Optional[int]=100) -> List[Tuple[str, int, int]]:
+    filtered_prompts = []
+    for dataset_id, value in sampled_prompts.items():
+        random.shuffle(value)
+        for each in value:
+            prompt = each["prompt"]
+            completion = each["response"]
+            prompt_token_ids = tokenizer(prompt).input_ids
+            prompt_len = len(prompt_token_ids)
+            completion_token_ids = tokenizer(completion).input_ids
+            output_len = len(completion_token_ids) if fixed_output_len is None else fixed_output_len
+            filtered_prompts.append((prompt, prompt_len, output_len, dataset_id))
+    return filtered_prompts
 
 async def get_request(
     input_requests: List[Tuple[str, int, int]],
@@ -371,6 +396,7 @@ def calculate_metrics(
                 tokenizer(outputs[i].generated_text, add_special_tokens=False).input_ids
             )
             actual_output_lens.append(output_len)
+            outputs[i].output_len = output_len
             total_input += input_requests[i][1]
             if output_len > 1:
                 tpots.append((outputs[i].latency - outputs[i].ttft) / (output_len - 1))
@@ -397,6 +423,7 @@ def calculate_metrics(
         total_input=total_input,
         total_output=sum(actual_output_lens),
         request_throughput=completed / dur_s,
+        input_throughput=total_input / dur_s,
         output_throughput=sum(actual_output_lens) / dur_s,
         total_token_throughput=(total_input + sum(actual_output_lens)) / dur_s,
         mean_request_throughput=total_request_throughput / completed if completed > 0 else 0,
@@ -406,6 +433,8 @@ def calculate_metrics(
         percentiles_output_throughput_per_user=[
             (p, np.percentile(reqs_output_throughputs or 0, p)) for p in selected_percentiles
         ],
+        min_output_throughput_per_user=np.min(reqs_output_throughputs or [0]),
+        max_output_throughput_per_user=np.max(reqs_output_throughputs or [0]),
         mean_ttft_ms=np.mean(ttfts or 0)
         * 1000,  # ttfts is empty if streaming is not supported by backend
         std_ttft_ms=np.std(ttfts or 0) * 1000,
@@ -413,26 +442,34 @@ def calculate_metrics(
         percentiles_ttft_ms=[
             (p, np.percentile(ttfts or 0, p) * 1000) for p in selected_percentiles
         ],
+        min_ttft_ms=np.min(ttfts or [0]) * 1000,
+        max_ttft_ms=np.max(ttfts or [0]) * 1000,
         mean_tpot_ms=np.mean(tpots or 0) * 1000,
         std_tpot_ms=np.std(tpots or 0) * 1000,
         median_tpot_ms=np.median(tpots or 0) * 1000,
         percentiles_tpot_ms=[
             (p, np.percentile(tpots or 0, p) * 1000) for p in selected_percentiles
         ],
+        min_tpot_ms=np.min(tpots or [0]) * 1000,
+        max_tpot_ms=np.max(tpots or [0]) * 1000,
         mean_itl_ms=np.mean(itls or 0) * 1000,
         std_itl_ms=np.std(itls or 0) * 1000,
         median_itl_ms=np.median(itls or 0) * 1000,
         percentiles_itl_ms=[
             (p, np.percentile(itls or 0, p) * 1000) for p in selected_percentiles
         ],
-        mean_e2el_ms=np.mean(e2els or 0) * 1000,
+        min_itl_ms=np.min(itls or [0]) * 1000,
+        max_itl_ms=np.max(itls or [0]) * 1000,
+        mean_e2el_ms=np.median(e2els or 0) * 1000,
         std_e2el_ms=np.std(e2els or 0) * 1000,
         median_e2el_ms=np.median(e2els or 0) * 1000,
         percentiles_e2el_ms=[
             (p, np.percentile(e2els or 0, p) * 1000) for p in selected_percentiles
         ],
+        min_e2el_ms=np.min(e2els or [0]) * 1000,
+        max_e2el_ms=np.max(e2els or [0]) * 1000,
     )
-    return metrics, actual_output_lens
+    return metrics, outputs
 
 
 async def benchmark(
@@ -441,13 +478,14 @@ async def benchmark(
     base_url: str,
     model_id: str,
     tokenizer: PreTrainedTokenizerBase,
-    input_requests: List[Tuple[str, int, int]],
+    input_requests: List[Tuple[str, int, int, Optional[str]]],
     best_of: int,
     use_beam_search: bool,
     request_rate: float,
     disable_tqdm: bool,
     profile: bool,
     selected_percentiles: List[str],
+    benchmark_id: Optional[UUID] = None,
 ):
     if backend in ASYNC_REQUEST_FUNCS:
         request_func = ASYNC_REQUEST_FUNCS[backend]
@@ -455,7 +493,7 @@ async def benchmark(
         raise ValueError(f"Unknown backend: {backend}")
 
     print("Starting initial single prompt test run...")
-    test_prompt, test_prompt_len, test_output_len = input_requests[0]
+    test_prompt, test_prompt_len, test_output_len, dataset_id = input_requests[0]
     test_input = RequestFuncInput(
         model=model_id,
         prompt=test_prompt,
@@ -497,7 +535,7 @@ async def benchmark(
     benchmark_start_time = time.perf_counter()
     tasks: List[asyncio.Task] = []
     async for request in get_request(input_requests, request_rate):
-        prompt, prompt_len, output_len = request
+        prompt, prompt_len, output_len, dataset_id = request
         request_func_input = RequestFuncInput(
             model=model_id,
             prompt=prompt,
@@ -506,6 +544,8 @@ async def benchmark(
             output_len=output_len,
             best_of=best_of,
             use_beam_search=use_beam_search,
+            dataset_id=dataset_id,
+            benchmark_id=benchmark_id,
         )
         tasks.append(
             asyncio.create_task(
@@ -534,7 +574,7 @@ async def benchmark(
 
     benchmark_duration = time.perf_counter() - benchmark_start_time
 
-    metrics, actual_output_lens = calculate_metrics(
+    metrics, outputs = calculate_metrics(
         input_requests=input_requests,
         outputs=outputs,
         dur_s=benchmark_duration,
@@ -565,20 +605,21 @@ async def benchmark(
 
     result = {
         "duration": benchmark_duration,
-        "completed": metrics.completed,
+        "successful_requests": metrics.completed,
         "total_input_tokens": metrics.total_input,
         "total_output_tokens": metrics.total_output,
-        "request_throughput": metrics.request_throughput,
-        "output_throughput": metrics.output_throughput,
+        # "request_throughput": metrics.request_throughput,
+        # "output_throughput": metrics.output_throughput,
         "output_throughput_per_user":[output.req_output_throughput for output in outputs],
-        "total_token_throughput": metrics.total_token_throughput,
+        # "total_token_throughput": metrics.total_token_throughput,
         "input_lens": [output.prompt_len for output in outputs],
-        "output_lens": actual_output_lens,
-        "e2els":[ output.latency for output in outputs],
+        "output_lens": [output.output_len for output in outputs],
+        "e2els": [output.latency for output in outputs],
         "ttfts": [output.ttft for output in outputs],
         "itls": [output.itl for output in outputs],
         "generated_texts": [output.generated_text for output in outputs],
         "errors": [output.error for output in outputs],
+        **asdict(metrics)
     }
 
     def process_one_metric(
@@ -655,7 +696,7 @@ async def benchmark(
 
     print("=" * 50)
 
-    return result
+    return result, outputs
 
 
 def main(args: argparse.Namespace):
@@ -665,6 +706,8 @@ def main(args: argparse.Namespace):
     backend = args.backend
     model_id = args.model
     tokenizer_id = args.tokenizer if args.tokenizer is not None else args.model
+    sampled_prompts = args.sampled_prompts
+    benchmark_id = args.benchmark_id
 
     if args.base_url is not None:
         api_url = f"{args.base_url}{args.endpoint}"
@@ -675,7 +718,14 @@ def main(args: argparse.Namespace):
 
     tokenizer = get_tokenizer(tokenizer_id, trust_remote_code=args.trust_remote_code)
 
-    if args.dataset is not None:
+    if sampled_prompts:
+        input_requests = transform_sampled_prompts(
+            sampled_prompts,
+            tokenizer,
+            fixed_output_len=args.mean_output_len
+        )
+
+    elif args.dataset is not None:
         warnings.warn(
             "The '--dataset' argument will be deprecated in the next "
             "release. Please use '--dataset-name' and "
@@ -766,7 +816,7 @@ def main(args: argparse.Namespace):
     else:
         raise ValueError(f"Unknown dataset: {args.dataset_name}")
 
-    benchmark_result = asyncio.run(
+    benchmark_result, individual_responses = asyncio.run(
         benchmark(
             backend=backend,
             api_url=api_url,
@@ -780,6 +830,7 @@ def main(args: argparse.Namespace):
             disable_tqdm=args.disable_tqdm,
             profile=args.profile,
             selected_percentiles=[float(p) for p in args.metric_percentiles.split(",")],
+            benchmark_id=benchmark_id,
         )
     )
 
@@ -794,6 +845,9 @@ def main(args: argparse.Namespace):
     result_json["best_of"] = args.best_of
     result_json["use_beam_search"] = args.use_beam_search
     result_json["num_prompts"] = args.num_prompts
+    result_json["input_tokens"] = args.random_input_len
+    result_json["output_tokens"] = args.random_output_len
+    result_json["concurrency"] = args.num_prompts
 
     # Metadata
     if args.metadata:
@@ -827,7 +881,7 @@ def main(args: argparse.Namespace):
         with open(file_name, "w") as outfile:
             json.dump(result_json, outfile)
 
-    return result_json
+    return result_json, individual_responses
 
 
 def get_args():
@@ -1026,23 +1080,35 @@ def get_args():
         'Use "--percentile-metrics" to select metrics.',
     )
 
+    parser.add_argument(
+        "--sampled-prompts",
+        type=json.loads,  # Convert JSON string to Python list of dicts
+        default=[],
+        help="Provide a list of sampled prompts as JSON string (Example: '[{\"id\": 1, \"prompt\": \"Q1\", \"response\": \"A1\"}]')"
+    )
+    parser.add_argument(
+        "--benchmark_id",
+        type=str,
+        default=None,
+        help="UUID of the benchmark run. If not provided, will be set to None."
+    )
     args = parser.parse_args()
 
     return args
 
 
-def run_benchmark(model, input_len, output_len, num_prompts, base_url):
+def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[dict] = None, benchmark_id: Optional[UUID] = None):
     # args = get_args()
     class BenchmarkArgs:
-        def __init__(self, model, input_len, output_len, num_prompts, base_url):
+        def __init__(self, model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[dict] = None, benchmark_id: Optional[UUID] = None):
             self.model = model
-            self.tokenizer = model
+            self.tokenizer = "Qwen/Qwen2.5-0.5B-Instruct"
             self.num_prompts = num_prompts
             self.seed = 42
             self.disable_tqdm = False
             self.backend = "vllm"
             self.percentile_metrics = "ttft,tpot,itl,e2el"
-            self.metric_percentiles = "95"
+            self.metric_percentiles = "25,75,95,99"
             self.base_url = base_url
             self.endpoint = "/completions"
             self.best_of = 1
@@ -1068,8 +1134,10 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url):
             self.metadata = None
             self.result_dir = "./results"
             self.result_filename = None
+            self.sampled_prompts = sampled_prompts
+            self.benchmark_id = benchmark_id
 
-    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url)
+    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url, sampled_prompts, benchmark_id)
 
     return main(args)
 

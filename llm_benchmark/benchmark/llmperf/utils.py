@@ -114,7 +114,7 @@ def randomly_sample_sonnet_lines_prompt(
                 break
             prompt += line_to_add
             remaining_prompt_tokens -= get_token_length(line_to_add)
-    return (prompt, num_prompt_tokens)
+    return (prompt, num_prompt_tokens, None)
 
 
 def sample_random_positive_int(mean: int, stddev: int) -> int:
@@ -142,3 +142,40 @@ def flatten_dict(d, parent_key="", sep="_"):
         else:
             items.append((new_key, v))
     return dict(items)
+
+
+def sample_requests(
+    concurrent_requests,
+    mean_input_tokens,
+    stddev_input_tokens,
+    mean_output_tokens,
+    stddev_output_tokens,
+    tokenizer,
+):
+    num_output_tokens_list = []
+    prompts = []
+    for i in range(concurrent_requests):
+        num_output_tokens = (sample_random_positive_int(
+            mean_output_tokens, stddev_output_tokens
+        ))
+        num_output_tokens_list.append(num_output_tokens)
+
+        prompts.append(randomly_sample_sonnet_lines_prompt(
+            prompt_tokens_mean=mean_input_tokens,
+            prompt_tokens_stddev=stddev_input_tokens,
+            expect_output_tokens=num_output_tokens,
+            tokenizer=tokenizer
+        ))
+    return prompts, num_output_tokens_list
+
+
+def transform_sampled_requests(sampled_prompts: dict, tokenizer) -> list[Tuple[str, int]]:
+    get_token_length = lambda text: len(tokenizer.encode(text))
+    sampled_requests = []
+    num_output_token_list = []
+    for dataset_id, prompts in sampled_prompts.items():
+        for each in prompts:
+            prompt = each["prompt"]
+            sampled_requests.append((prompt, get_token_length(prompt), dataset_id))
+            num_output_token_list.append(get_token_length(each["response"]))
+    return sampled_requests, num_output_token_list
