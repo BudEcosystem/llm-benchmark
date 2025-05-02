@@ -90,4 +90,14 @@ class DeviceInfo(Enum):
         peak_i4_TFLOPS=0,
         inter_node_bandwidth_in_GB_per_sec=100
     )
-    
+    AQUA_VANJARAM_INSTINCT_MI300X_VF = GPUInfo(
+        name="AQUA_VANJARAM_INSTINCT_MI300X_VF",
+        mem_per_GPU_in_GB=192,
+        hbm_bandwidth_in_GB_per_sec=5300,
+        intra_node_bandwidth_in_GB_per_sec=128,
+        intra_node_min_message_latency=100,
+        peak_fp16_TFLOPS=1300,
+        peak_i8_TFLOPS=2610,
+        peak_i4_TFLOPS=0,
+        inter_node_bandwidth_in_GB_per_sec=100
+    )

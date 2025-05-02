@@ -227,7 +227,7 @@ def get_rocm_info():
                     "device_id": rocml.smi_get_device_id(device_idx),
                     "device_uuid": rocml.smi_get_device_uuid(device_idx),
                     "device_unique_id": rocml.smi_get_device_unique_id(device_idx),
-                    "product_name": rocml.smi_get_device_name(device_idx).replace(" ", "_").upper(),
+                    "product_name": rocml.smi_get_device_name(device_idx).replace(" ", "_").replace('[','').replace(']','').upper(),
                     "kernel_version": rocml.smi_get_kernel_version(),
                     # "product_brand": pynvml.nvmlDeviceGetBrand(handle),
                     # "architecture": extract_value(
@@ -249,7 +249,7 @@ def get_rocm_info():
             )
         return rocm_info, None
     except Exception as e:
-        print(f"GPU spec extractismi_outputon failed with {e}")
+        print(f"GPU spec extract rocm-smi_output failed with {e}")
     finally:
         rocml.smi_shutdown()
 
@@ -258,8 +258,8 @@ def get_rocm_info():
 def create_rocm_config():
 
     dev_info, _ = get_rocm_info()
-    print(dev_info[0])
-    print(dev_info[0]['product_name'])
+    # print(dev_info[0])
+    # print(dev_info[0]['product_name'])
     
     device_info = DeviceInfo[dev_info[0]['product_name']].value
     device_config = {
