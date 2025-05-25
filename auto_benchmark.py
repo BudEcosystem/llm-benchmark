@@ -325,28 +325,29 @@ def run_benchmark(args, engine_config, run_config, extras=None, checkpoint=None)
                     "status": "pending",
                 }
 
-            stop_event = threading.Event()
-            log_metrics_task = threading.Thread(
-                target=hw_monitor.log_system_metrics,
-                kwargs={
-                    "output_dir": os.path.join(
-                        os.environ["PROFILER_RESULT_DIR"], model.replace("/", "--")
-                    ),
-                    "pid": single_node_controller.get_container_pid(container_id)
-                    if container_id is not None
-                    else None,
-                    "interval": 3,
-                    "stop_event": stop_event,
-                    "metadata": {
-                        "run_id": run_id,
-                        "engine_config_id": engine_config_id,
+            if args.profile_hardware:
+                stop_event = threading.Event()
+                log_metrics_task = threading.Thread(
+                    target=hw_monitor.log_system_metrics,
+                    kwargs={
+                        "output_dir": os.path.join(
+                            os.environ["PROFILER_RESULT_DIR"], model.replace("/", "--")
+                        ),
+                        "pid": single_node_controller.get_container_pid(container_id)
+                        if container_id is not None
+                        else None,
+                        "interval": 3,
+                        "stop_event": stop_event,
+                        "metadata": {
+                            "run_id": run_id,
+                            "engine_config_id": engine_config_id,
+                        },
                     },
-                },
-            )
-            log_metrics_task.start()
+                )
+                log_metrics_task.start()
 
             try:
-                if args.engine != "litellm_proxy":
+                if args.engine != "litellm_proxy" and args.profile_model:
                     _ = model_tools.infer(
                         model_name=model,
                         device_config=device_config,
@@ -427,10 +428,11 @@ def run_benchmark(args, engine_config, run_config, extras=None, checkpoint=None)
             finally:
                 time.sleep(1)
 
-                stop_event.set()
-                log_metrics_task.join()
-                log_metrics_task = None
-                stop_event = None
+                if log_metrics_task is not None and stop_event is not None:
+                    stop_event.set()
+                    log_metrics_task.join()
+                    log_metrics_task = None
+                    stop_event = None
 
             benchmark_tools.create_summary(
                 [result],

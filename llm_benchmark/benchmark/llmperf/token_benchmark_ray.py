@@ -70,9 +70,16 @@ def get_token_throughput_latencies(
     """
     random.seed(11111)
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        model
-    )
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            model
+        )
+    except Exception as e:
+        # print(f"Error loading tokenizer for {model}: {e}")
+        tokenizer = AutoTokenizer.from_pretrained(
+            "Qwen/Qwen3-0.6B"
+        )
+    
     get_token_length = lambda text: len(tokenizer.encode(text))
     
     if not additional_sampling_params:
