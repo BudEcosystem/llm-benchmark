@@ -173,15 +173,18 @@ def create_engine_config(engine_config_file):
             "run_command": engine_config.get("run_command"),
             "health_check_endpoint": engine_config.get("health_check_endpoint"),
             "benchmark_endpoint": engine_config.get("benchmark_endpoint"),
+            "base_url": engine_config.get("base_url"),
         },
     )
 
 
 def run_benchmark(args, engine_config, run_config, extras=None, checkpoint=None):
     checkpoint = checkpoint or {}
-    base_url = f"http://localhost:{engine_config['args']['port']}" + (
-        extras.get("benchmark_endpoint") or "/v1"
-    )
+    base_url = extras.get("base_url")
+    if not base_url:
+        base_url = f"http://localhost:{engine_config['args']['port']}" + (
+            extras.get("benchmark_endpoint") or "/v1"
+        )
     model = (
         engine_config["args"].get("model")
         or engine_config["args"].get("model-path")

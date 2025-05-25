@@ -1110,7 +1110,7 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_p
             self.percentile_metrics = "ttft,tpot,itl,e2el"
             self.metric_percentiles = "25,75,95,99"
             self.base_url = base_url
-            self.endpoint = "/completions"
+            self.endpoint = "/chat/completions"
             self.best_of = 1
             self.use_beam_search = False
             self.dataset = None

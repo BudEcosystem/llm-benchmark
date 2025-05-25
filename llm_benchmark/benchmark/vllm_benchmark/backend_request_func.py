@@ -259,7 +259,13 @@ async def async_request_openai_completions(
         assert not request_func_input.use_beam_search
         payload = {
             "model": request_func_input.model,
-            "prompt": request_func_input.prompt,
+            # "prompt": request_func_input.prompt,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": request_func_input.prompt,
+                },
+            ],
             "temperature": 0.0,
             "best_of": request_func_input.best_of,
             "max_tokens": request_func_input.output_len,
@@ -298,7 +304,7 @@ async def async_request_openai_completions(
                             # NOTE: Some completion API might have a last
                             # usage summary response without a token so we
                             # want to check a token was generated
-                            if data["choices"][0]["text"]:
+                            if data["choices"][0]["delta"]["content"]:
                                 timestamp = time.perf_counter()
                                 # First token
                                 if ttft == 0.0:
@@ -311,7 +317,7 @@ async def async_request_openai_completions(
                                                       most_recent_timestamp)
 
                                 most_recent_timestamp = timestamp
-                                generated_text += data["choices"][0]["text"]
+                                generated_text += data["choices"][0]["delta"]["content"]
                                 token_count += 1
                                 
                     output.generated_text = generated_text
