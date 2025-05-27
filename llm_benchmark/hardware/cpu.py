@@ -35,7 +35,7 @@ def get_memcpy_bandwidth(numa_count):
     try:
         # Run the command
         membind_value = 1 if numa_count > 1 else 0
-        command = ["numactl", "--cpunodebind=0", "--membind={}".format(membind_value), "mbw", "1000"]
+        command = ["numactl", "--cpunodebind=0", "--membind={}".format(membind_value), "mbw", "100"]
         
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
