@@ -35,7 +35,7 @@ from transformers import AutoTokenizer
 
 
 def get_token_throughput_latencies(
-    model: str,
+    model_ids: List[str],
     mean_input_tokens: int,
     stddev_input_tokens: int,
     mean_output_tokens: int,
@@ -51,7 +51,7 @@ def get_token_throughput_latencies(
     """Get the token throughput and latencies for the given model.
 
     Args:
-        model: The name of the model to query.
+        model_ids: List of model names to randomly use for each request.
         mean_input_tokens: The mean number of tokens to send in the prompt for the request.
         stddev_input_tokens: The standard deviation of the number of tokens to send in the prompt for the request.
         mean_output_tokens: The mean number of tokens to generate per request.
@@ -72,7 +72,7 @@ def get_token_throughput_latencies(
 
     try:
         tokenizer = AutoTokenizer.from_pretrained(
-            model
+            model_ids[0]
         )
     except Exception as e:
         # print(f"Error loading tokenizer for {model}: {e}")
@@ -113,7 +113,7 @@ def get_token_throughput_latencies(
         default_sampling_params = {"max_tokens": num_output_tokens_list.pop()}
         default_sampling_params.update(additional_sampling_params)
         request_config = RequestConfig(
-            model=model,
+            model=random.choice(model_ids),
             prompt=prompts.pop(),
             sampling_params=default_sampling_params,
             llm_api=llm_api,
@@ -175,11 +175,12 @@ def get_token_throughput_latencies(
         all_metrics.append(request_metrics)
     completed_requests.extend(all_metrics)
 
-    print(f"\Results for token benchmark for {model} queried with the {llm_api} api.\n")
+    models_str = ",".join(model_ids)
+    print(f"\nResults for token benchmark for {models_str} queried with the {llm_api} api.\n")
     ret = metrics_summary(completed_requests, start_time, end_time)
 
     metadata = {
-        "model": model,
+        "model": models_str,
         "mean_input_tokens": mean_input_tokens,
         "stddev_input_tokens": stddev_input_tokens,
         "mean_output_tokens": mean_output_tokens,
@@ -296,7 +297,7 @@ def metrics_summary(
 
 
 def run_token_benchmark(
-    model: str,
+    model: List[str],
     max_num_completed_requests: int,
     num_concurrent_requests: int,
     mean_input_tokens: int,
@@ -314,7 +315,7 @@ def run_token_benchmark(
     """
     Args:
         llm_api: The name of the llm api to use.
-        model: The name of the model to query.
+        model: List of model names to randomly use for each request.
         max_num_completed_requests: The number of requests to complete before finishing the test.
         test_timeout_s: The amount of time to run the test for before reporting results.
         num_concurrent_requests: The number of concurrent requests to make. Increase
@@ -335,7 +336,7 @@ def run_token_benchmark(
         )
 
     summary, individual_responses = get_token_throughput_latencies(
-        model=model,
+        model_ids=model,
         llm_api=llm_api,
         test_timeout_s=test_timeout_s,
         max_num_completed_requests=max_num_completed_requests,
@@ -350,7 +351,8 @@ def run_token_benchmark(
     )
 
     if results_dir:
-        filename = f"{model}_{mean_input_tokens}_{mean_output_tokens}"
+        base_model = model[0] if isinstance(model, list) else model
+        filename = f"{base_model}_{mean_input_tokens}_{mean_output_tokens}"
         filename = re.sub(r"[^\w\d-]+", "-", filename)
         filename = re.sub(r"-{2,}", "-", filename)
         summary_filename = f"{filename}_summary"
@@ -387,7 +389,11 @@ args = argparse.ArgumentParser(
 )
 
 args.add_argument(
-    "--model", type=str, required=True, help="The model to use for this load test."
+    "--model",
+    type=str,
+    nargs="+",
+    required=True,
+    help="Model names to cycle through during the load test.",
 )
 args.add_argument(
     "--mean-input-tokens",

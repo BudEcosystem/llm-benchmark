@@ -156,10 +156,15 @@ def create_engine_config(engine_config_file):
     with open(engine_config_file, "r") as f:
         engine_config = yaml.safe_load(f)
 
+    args_section = engine_config["args"]
+    model_list = args_section.get("model")
+    if isinstance(model_list, list):
+        args_section = {k: v for k, v in args_section.items() if k != "model"}
+
     # Separate the fixed parameters and the parameters with arrays
     # Process the 'args' section
     fixed_args, array_args, arg_combinations, arg_keys = generate_combinations(
-        engine_config["args"]
+        args_section
     )
 
     # Process the 'envs' section
@@ -183,6 +188,9 @@ def create_engine_config(engine_config_file):
             # Update with current combination of 'envs'
             if env_comb:
                 new_config["envs"].update(dict(zip(env_keys, env_comb)))
+
+            if model_list is not None:
+                new_config["args"]["model"] = model_list
 
             # Append the complete config to the list
             configs.append(new_config)
@@ -211,6 +219,7 @@ def run_benchmark(args, engine_config, run_config, extras=None, checkpoint=None)
         or engine_config["args"].get("model-path")
         or engine_config["args"].get("model-id")
     )
+    model_for_warmup = model[0] if isinstance(model, list) else model
 
     engine_kwargs = {
         "engine": args.engine,
@@ -272,7 +281,7 @@ def run_benchmark(args, engine_config, run_config, extras=None, checkpoint=None)
         if args.engine == "litellm_proxy":
             latency_factors = {"T_base": 0.5, "T_input": 0.005, "T_output": 0.005}
         warmup_benchmark(
-            model,
+            model_for_warmup,
             base_url,
             args.benchmark_script,
             env_values=engine_config["envs"] if engine_config else None,

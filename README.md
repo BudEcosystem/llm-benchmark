@@ -22,6 +22,16 @@ export OPENAI_API_KEY=fake-api-key
 python auto_bemchmark.py --model meta-llama/Meta-Llama-3-8B-Instruct --docker-image IMAGE_ID --input-tokens 100 --output-tokens 100 --concurrency 1
 ```
 
+Multiple models can be benchmarked by listing them in your engine config YAML:
+
+```yaml
+args:
+  model:
+    - modelA
+    - modelB
+    - modelC
+```
+
 Litellm proxy benchmarking
 
 ```bash
