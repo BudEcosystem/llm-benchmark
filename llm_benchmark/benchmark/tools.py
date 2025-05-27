@@ -1,7 +1,7 @@
 import os
 import csv
 import shutil
-from typing import Optional
+from typing import Optional, Union, List
 from uuid import UUID
 
 from llm_benchmark.benchmark.vllm_benchmark.benchmark_serving import (
@@ -245,7 +245,7 @@ def format_budlatent_result(result):
 
 
 def run_benchmark(
-    model: str,
+    model: Union[str, List[str]],
     base_url: str,
     input_token: int,
     output_token: int,
@@ -274,8 +274,15 @@ def run_benchmark(
         datasets
     )
 
+    if isinstance(model, list):
+        model_str = ",".join(model)
+        model_dir = model[0].replace("/", "--")
+    else:
+        model_str = model
+        model_dir = model.replace("/", "--")
+
     if result_dir is not None:
-        result_dir = os.path.join(result_dir, model.replace("/", "--"))
+        result_dir = os.path.join(result_dir, model_dir)
 
         traces_dir = f"{result_dir}/profiler_traces/"
         if os.path.exists(traces_dir):
@@ -283,8 +290,8 @@ def run_benchmark(
         os.makedirs(traces_dir, exist_ok=True)
 
     print(
-        "Running benchmark for model: ",
-        model,
+        "Running benchmark for model(s): ",
+        model_str,
         "with input token: ",
         input_token,
         "and output token: ",

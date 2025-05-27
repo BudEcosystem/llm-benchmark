@@ -476,7 +476,7 @@ async def benchmark(
     backend: str,
     api_url: str,
     base_url: str,
-    model_id: str,
+    model_ids: List[str],
     tokenizer: PreTrainedTokenizerBase,
     input_requests: List[Tuple[str, int, int, Optional[str]]],
     best_of: int,
@@ -495,7 +495,7 @@ async def benchmark(
     print("Starting initial single prompt test run...")
     test_prompt, test_prompt_len, test_output_len, dataset_id = input_requests[0]
     test_input = RequestFuncInput(
-        model=model_id,
+        model=model_ids[0],
         prompt=test_prompt,
         api_url=api_url,
         prompt_len=test_prompt_len,
@@ -516,7 +516,7 @@ async def benchmark(
     if profile:
         print("Starting profiler...")
         profile_input = RequestFuncInput(
-            model=model_id,
+            model=model_ids[0],
             prompt=test_prompt,
             api_url=base_url + "/start_profile",
             prompt_len=test_prompt_len,
@@ -537,7 +537,7 @@ async def benchmark(
     async for request in get_request(input_requests, request_rate):
         prompt, prompt_len, output_len, dataset_id = request
         request_func_input = RequestFuncInput(
-            model=model_id,
+            model=random.choice(model_ids),
             prompt=prompt,
             api_url=api_url,
             prompt_len=prompt_len,
@@ -557,7 +557,7 @@ async def benchmark(
     if profile:
         print("Stopping profiler...")
         profile_input = RequestFuncInput(
-            model=model_id,
+            model=model_ids[0],
             prompt=test_prompt,
             api_url=base_url + "/stop_profile",
             prompt_len=test_prompt_len,
@@ -704,8 +704,8 @@ def main(args: argparse.Namespace):
     np.random.seed(args.seed)
 
     backend = args.backend
-    model_id = args.model
-    tokenizer_id = args.tokenizer if args.tokenizer is not None else args.model
+    model_ids = args.model if isinstance(args.model, list) else [args.model]
+    tokenizer_id = args.tokenizer if args.tokenizer is not None else model_ids[0]
     sampled_prompts = args.sampled_prompts
     benchmark_id = args.benchmark_id
 
@@ -821,7 +821,7 @@ def main(args: argparse.Namespace):
             backend=backend,
             api_url=api_url,
             base_url=base_url,
-            model_id=model_id,
+            model_ids=model_ids,
             tokenizer=tokenizer,
             input_requests=input_requests,
             best_of=args.best_of,
@@ -840,7 +840,7 @@ def main(args: argparse.Namespace):
     current_dt = datetime.now().strftime("%Y%m%d-%H%M%S")
     result_json["date"] = current_dt
     result_json["backend"] = backend
-    result_json["model_id"] = model_id
+    result_json["model_id"] = ",".join(model_ids)
     result_json["tokenizer_id"] = tokenizer_id
     result_json["best_of"] = args.best_of
     result_json["use_beam_search"] = args.use_beam_search
@@ -869,8 +869,8 @@ def main(args: argparse.Namespace):
     result_json = {**result_json, **benchmark_result}
 
     if args.save_result:
-        # Save to file
-        base_model_id = model_id.split("/")[-1]
+        # Save to file using the first model name for filename
+        base_model_id = model_ids[0].split("/")[-1]
         file_name = (
             f"{backend}-{args.request_rate}qps-{base_model_id}-{current_dt}.json"  # noqa
         )
@@ -934,8 +934,9 @@ def get_args():
     parser.add_argument(
         "--model",
         type=str,
+        nargs="+",
         required=True,
-        help="Name of the model.",
+        help="Name(s) of the model(s). Provide multiple models separated by spaces.",
     )
     parser.add_argument(
         "--tokenizer",
