@@ -219,7 +219,7 @@ def run_benchmark(args, engine_config, run_config, extras=None, checkpoint=None)
         or engine_config["args"].get("model-path")
         or engine_config["args"].get("model-id")
     )
-    model_for_warmup = model[0] if isinstance(model, list) else model
+    model_for_warmup = model if isinstance(model, list) else [model]
 
     engine_kwargs = {
         "engine": args.engine,
@@ -420,7 +420,7 @@ def run_benchmark(args, engine_config, run_config, extras=None, checkpoint=None)
                 #     "status": "benchmark_failed",
                 # }
                 result = BenchmarkResultSchema(
-                    model=model,
+                    model=model[0] if isinstance(model, list) else model,
                     engine=args.engine,
                     engine_config_id=engine_config_id,
                     run_id=run_id,

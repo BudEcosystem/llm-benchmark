@@ -164,7 +164,7 @@ def format_llmperf_result(result, individual_responses):
     total_input_tokens = sum([metric["number_input_tokens"] for metric in individual_responses])
     total_output_tokens = sum([metric["number_output_tokens"] for metric in individual_responses])
     benchmark_result = BenchmarkResultSchema(
-        model=result["model"],
+        model=result["model"][0] if isinstance(result["model"], list) else result["model"],
         concurrency=result["num_concurrent_requests"],
         duration=result["results"]["end_to_end_latency_s"]["max"],
         successful_requests=num_completed_requests,
@@ -265,7 +265,7 @@ def run_benchmark(
     max_output_tokens: Optional[int] = None,
 ):
     if benchmark_script != "litellm_proxy":
-        os.environ["OPENAI_API_KEY"] = "secret_abcdefg"
+        os.environ["OPENAI_API_KEY"] = "budserve_JZl9YSF0nlQPPRuOEKvBymtQ7JiLVvzUmYK4dxaN"
         os.environ["OPENAI_API_BASE"] = base_url
     
     sampled_prompts = combine_multiple_datasets(

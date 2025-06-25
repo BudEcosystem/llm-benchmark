@@ -142,10 +142,10 @@ def sample_sharegpt_requests(
         if prompt_len < 4 or output_len < 4:
             # Prune too short sequences.
             continue
-        if prompt_len > 1024 or prompt_len + output_len > 2048:
-            # Prune too long sequences.
-            continue
-        filtered_dataset.append((prompt, prompt_len, output_len))
+        # if prompt_len > 1024 or prompt_len + output_len > 2048:
+        #     # Prune too long sequences.
+        #     continue
+        filtered_dataset.append((prompt, prompt_len, output_len, None))
 
     return filtered_dataset
 
@@ -233,7 +233,7 @@ def sample_requests(
                 sliced_prompt = tokenizer.decode(
                     prompt_token_ids[:random_length], skip_special_tokens=True
                 )
-                filtered_dataset.append((sliced_prompt, random_length, output_len))
+                filtered_dataset.append((sliced_prompt, random_length, output_len, None))
 
             if len(filtered_dataset) >= num_requests:
                 break
@@ -751,24 +751,25 @@ def main(args: argparse.Namespace):
         )
 
     elif args.dataset_name == "hf":
-        # input_requests = sample_sharegpt_requests(
-        #     dataset_path=args.dataset_path,
-        #     num_requests=args.num_prompts,
-        #     tokenizer=tokenizer,
-        #     fixed_output_len=args.sharegpt_output_len,
-        # )
-        input_requests = sample_requests(
+        input_requests = sample_sharegpt_requests(
             dataset_path=args.dataset_path,
             num_requests=args.num_prompts,
             tokenizer=tokenizer,
-            mean_input_len = args.mean_input_len,
-            stddev_input_len=args.std_input_len,
-            fixed_output_len=args.mean_output_len,
-            input_column=args.input_column,
-            output_column=args.output_column,
-            seed=args.seed
-            
+            # fixed_output_len=args.sharegpt_output_len,
         )
+        # print(input_requests)
+        # input_requests = sample_requests(
+        #     dataset_path=args.dataset_path,
+        #     num_requests=args.num_prompts,
+        #     tokenizer=tokenizer,
+        #     mean_input_len = args.mean_input_len,
+        #     stddev_input_len=args.std_input_len,
+        #     fixed_output_len=args.mean_output_len,
+        #     input_column=args.input_column,
+        #     output_column=args.output_column,
+        #     seed=args.seed
+            
+        # )
 
     elif args.dataset_name == "sonnet":
         # Do not format the prompt, pass to message directly
@@ -1115,9 +1116,9 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_p
             self.best_of = 1
             self.use_beam_search = False
             self.dataset = None
-            self.dataset_name = "random"
-            self.dataset_path = None
-            self.input_column = "input"
+            self.dataset_name = "hf"
+            self.dataset_path = "/datadisk/ditto/llm-benchmark/ShareGPT_V3_unfiltered_cleaned_split.json"
+            self.input_column = "conversations"
             self.output_column = None
             self.mean_input_len = 200
             self.std_input_len = None
