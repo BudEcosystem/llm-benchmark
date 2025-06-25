@@ -409,6 +409,7 @@ async def benchmark_fn(
     batch_size: int,
     seed: int,
     sampled_prompts: Optional[dict] = None,
+    dataset_name: Optional[str] = None,
 ) -> List[float]:
     """Benchmark the embedding server with customization options."""
     pbar = tqdm(total=num_requests, desc="Benchmarking requests")
@@ -422,6 +423,14 @@ async def benchmark_fn(
                 sampled_prompts,
                 tokenizer,
                 fixed_output_len=100
+            )
+        elif dataset_name == "random":
+            input_requests = sample_random_requests(
+                input_len=num_tokens,
+                output_len=100,  # For embeddings, output_len is not used
+                num_prompts=num_requests * batch_size,
+                range_ratio=1.0,
+                tokenizer=tokenizer,
             )
         else:
             input_requests = sample_sharegpt_requests(
@@ -499,6 +508,7 @@ async def benchmark(
         params["batch_size"],
         args.seed,
         sampled_prompts=sampled_prompts,
+        dataset_name=args.dataset_name if hasattr(args, 'dataset_name') else None,
     )
 
     benchmark_duration = time.perf_counter() - benchmark_start_time
@@ -684,11 +694,13 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_p
     dataset = os.path.join(
         os.path.expanduser("~"), "ShareGPT_V3_unfiltered_cleaned_split.json"
     )
+    dataset_name = "hf"  # default dataset name
     if not os.path.exists(dataset) and not sampled_prompts:
         print(
             "ShareGPT_V3_unfiltered_cleaned_split.json not found in home directory, using random dataset"
         )
         dataset = "random"
+        dataset_name = "random"
 
     class BenchmarkArgs:
         def __init__(self, model, input_len, output_len, num_prompts, base_url):
@@ -702,7 +714,7 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_p
             self.metric_percentiles = "95"
             self.url = base_url
             self.dataset = dataset
-            self.dataset_name = dataset
+            self.dataset_name = dataset_name
             self.dataset_path = None
             self.input_column = "input"
             self.output_column = None
