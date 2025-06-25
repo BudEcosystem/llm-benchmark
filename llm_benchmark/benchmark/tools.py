@@ -313,6 +313,7 @@ def run_benchmark(
             model, input_token, output_token, concurrency, base_url, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id
         )
         result_output = format_budlatent_result(result_output)
+        individual_responses = []  # Budlatent doesn't track individual responses yet
     elif benchmark_script == "litellm_proxy":
         litellm_master_key = env_values.get("LITELLM_MASTER_KEY")
         if litellm_master_key is None:
