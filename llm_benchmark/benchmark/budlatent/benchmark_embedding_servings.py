@@ -664,7 +664,7 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url):
     class BenchmarkArgs:
         def __init__(self, model, input_len, output_len, num_prompts, base_url):
             self.model = model
-            self.tokenizer = model
+            self.tokenizer = "Qwen/Qwen2.5-0.5B-Instruct"
             self.num_requests = num_prompts
             self.seed = 42
             self.disable_tqdm = False
