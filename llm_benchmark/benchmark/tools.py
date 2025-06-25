@@ -310,7 +310,7 @@ def run_benchmark(
         result_output, individual_responses = format_llmperf_result(result_output, individual_responses)
     elif benchmark_script == "budlatent":
         result_output = budlatent_run_benchmark(
-            model, input_token, output_token, concurrency, base_url
+            model, input_token, output_token, concurrency, base_url, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id
         )
         result_output = format_budlatent_result(result_output)
     elif benchmark_script == "litellm_proxy":
