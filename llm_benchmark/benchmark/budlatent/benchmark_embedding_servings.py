@@ -694,6 +694,6 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url):
             self.batch_size = 1
             self.warmup_requests = 0
 
-    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url)
+    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url+"/embeddings")
 
     return main(args)
