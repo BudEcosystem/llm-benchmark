@@ -1,5 +1,6 @@
 import os
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
+from uuid import UUID
 import aiohttp
 import asyncio
 import argparse
@@ -289,6 +290,21 @@ def sample_random_requests(
     return input_requests
 
 
+def transform_sampled_prompts(sampled_prompts: dict, tokenizer: PreTrainedTokenizerBase, fixed_output_len: Optional[int]=100) -> List[Tuple[str, int, int, Optional[str]]]:
+    filtered_prompts = []
+    for dataset_id, value in sampled_prompts.items():
+        random.shuffle(value)
+        for each in value:
+            prompt = each["prompt"]
+            completion = each["response"]
+            prompt_token_ids = tokenizer(prompt).input_ids
+            prompt_len = len(prompt_token_ids)
+            completion_token_ids = tokenizer(completion).input_ids
+            output_len = len(completion_token_ids) if fixed_output_len is None else fixed_output_len
+            filtered_prompts.append((prompt, prompt_len, output_len, dataset_id))
+    return filtered_prompts
+
+
 async def get_request(
     input_requests: List[Tuple[str, int, int]],
     request_rate: float,
@@ -392,6 +408,8 @@ async def benchmark_fn(
     request_rate: float,
     batch_size: int,
     seed: int,
+    sampled_prompts: Optional[dict] = None,
+    dataset_name: Optional[str] = None,
 ) -> List[float]:
     """Benchmark the embedding server with customization options."""
     pbar = tqdm(total=num_requests, desc="Benchmarking requests")
@@ -400,13 +418,28 @@ async def benchmark_fn(
         semaphore = asyncio.Semaphore(max_concurrent)
 
         # Generate dataset
-        input_requests = sample_sharegpt_requests(
-            dataset_path=dataset_path,
-            num_requests=num_requests * batch_size,
-            tokenizer=tokenizer,
-            mean_input_len=num_tokens,
-            seed=seed,
-        )
+        if sampled_prompts:
+            input_requests = transform_sampled_prompts(
+                sampled_prompts,
+                tokenizer,
+                fixed_output_len=100
+            )
+        elif dataset_name == "random":
+            input_requests = sample_random_requests(
+                input_len=num_tokens,
+                output_len=100,  # For embeddings, output_len is not used
+                num_prompts=num_requests * batch_size,
+                range_ratio=1.0,
+                tokenizer=tokenizer,
+            )
+        else:
+            input_requests = sample_sharegpt_requests(
+                dataset_path=dataset_path,
+                num_requests=num_requests * batch_size,
+                tokenizer=tokenizer,
+                mean_input_len=num_tokens,
+                seed=seed,
+            )
 
         async def task(payload):
             async with semaphore:
@@ -416,7 +449,10 @@ async def benchmark_fn(
         inputs = []
         async for request in get_request(input_requests, request_rate):
             if len(inputs) < batch_size:
-                prompt, _, _ = request
+                if len(request) == 4:  # sampled prompts include dataset_id
+                    prompt, _, _, _ = request
+                else:
+                    prompt, _, _ = request
                 inputs.append(prompt)
             if len(inputs) >= batch_size:
                 payload = create_request_payload(inputs[:batch_size], model)
@@ -431,7 +467,7 @@ async def benchmark_fn(
 
 
 async def benchmark(
-    args, tokenizer: PreTrainedTokenizerBase, selected_percentiles: List[float]
+    args, tokenizer: PreTrainedTokenizerBase, selected_percentiles: List[float], sampled_prompts: Optional[dict] = None
 ) -> pd.DataFrame:
     """Run all benchmark combinations and return results as DataFrame."""
 
@@ -471,6 +507,8 @@ async def benchmark(
         params["request_rate"],
         params["batch_size"],
         args.seed,
+        sampled_prompts=sampled_prompts,
+        dataset_name=args.dataset_name if hasattr(args, 'dataset_name') else None,
     )
 
     benchmark_duration = time.perf_counter() - benchmark_start_time
@@ -629,11 +667,11 @@ def get_args():
     return args
 
 
-def main(args: argparse.Namespace):
+def main(args: argparse.Namespace, sampled_prompts: Optional[dict] = None):
     random.seed(args.seed)
     np.random.seed(args.seed)
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer, trust_remote_code=True)
 
     if args.num_tokens > tokenizer.model_max_length:
         raise ValueError(
@@ -646,25 +684,28 @@ def main(args: argparse.Namespace):
             args,
             tokenizer,
             selected_percentiles=[float(p) for p in args.metric_percentiles.split(",")],
+            sampled_prompts=sampled_prompts,
         )
     )
 
 
-def run_benchmark(model, input_len, output_len, num_prompts, base_url):
+def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[dict] = None, benchmark_id: Optional[UUID] = None):
     # args = get_args()
     dataset = os.path.join(
         os.path.expanduser("~"), "ShareGPT_V3_unfiltered_cleaned_split.json"
     )
-    if not os.path.exists(dataset):
+    dataset_name = "hf"  # default dataset name
+    if not os.path.exists(dataset) and not sampled_prompts:
         print(
             "ShareGPT_V3_unfiltered_cleaned_split.json not found in home directory, using random dataset"
         )
         dataset = "random"
+        dataset_name = "random"
 
     class BenchmarkArgs:
         def __init__(self, model, input_len, output_len, num_prompts, base_url):
             self.model = model
-            self.tokenizer = model
+            self.tokenizer = "Qwen/Qwen2.5-0.5B-Instruct"
             self.num_requests = num_prompts
             self.seed = 42
             self.disable_tqdm = False
@@ -673,7 +714,7 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url):
             self.metric_percentiles = "95"
             self.url = base_url
             self.dataset = dataset
-            self.dataset_name = dataset
+            self.dataset_name = dataset_name
             self.dataset_path = None
             self.input_column = "input"
             self.output_column = None
@@ -693,7 +734,9 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url):
             self.max_concurrent = num_prompts
             self.batch_size = 1
             self.warmup_requests = 0
+            self.sampled_prompts = sampled_prompts
+            self.benchmark_id = benchmark_id
 
-    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url)
+    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url+"/embeddings")
 
-    return main(args)
+    return main(args, sampled_prompts)
