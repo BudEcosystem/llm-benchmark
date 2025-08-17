@@ -99,6 +99,15 @@ class OpenAIChatCompletionsClient(LLMClient):
                         raise RuntimeError(data["error"]["message"])
                         
                     delta = data["choices"][0]["delta"]
+                    # INSERT_YOUR_CODE
+                    # Take content from either content or reasoning_content
+                    content = None
+                    if "content" in delta:
+                        content = delta["content"]
+                    elif "reasoning_content" in delta:
+                        content = delta["reasoning_content"]
+                    if content is not None:
+                        delta["content"] = content
                     if delta.get("content", None):
                         if not ttft:
                             ttft = time.monotonic() - start_time

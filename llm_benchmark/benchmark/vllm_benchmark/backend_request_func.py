@@ -304,7 +304,14 @@ async def async_request_openai_completions(
                             # NOTE: Some completion API might have a last
                             # usage summary response without a token so we
                             # want to check a token was generated
-                            if data["choices"][0]["delta"]["content"]:
+                            # INSERT_YOUR_CODE
+                            # Take content from either content or reasoning_content
+                            content = None
+                            if "content" in data["choices"][0]["delta"]:
+                                content = data["choices"][0]["delta"]["content"]
+                            elif "reasoning_content" in data["choices"][0]["delta"]:
+                                content = data["choices"][0]["delta"]["reasoning_content"]
+                            if content is not None:
                                 timestamp = time.perf_counter()
                                 # First token
                                 if ttft == 0.0:
@@ -317,7 +324,7 @@ async def async_request_openai_completions(
                                                       most_recent_timestamp)
 
                                 most_recent_timestamp = timestamp
-                                generated_text += data["choices"][0]["delta"]["content"]
+                                generated_text += content
                                 token_count += 1
                                 
                     output.generated_text = generated_text
@@ -487,7 +494,14 @@ async def async_request_api_chat_completions(
                             data = json.loads(chunk)
 
                             delta = data["choices"][0]["delta"]
-                            if delta.get("content", None):
+                            # INSERT_YOUR_CODE
+                            # Take content from either content or reasoning_content
+                            content = None
+                            if "content" in delta:
+                                content = delta["content"]
+                            elif "reasoning_content" in delta:
+                                content = delta["reasoning_content"]
+                            if content is not None:
                                 # First token
                                 if ttft == 0.0:
                                     ttft = time.perf_counter() - st
@@ -498,7 +512,7 @@ async def async_request_api_chat_completions(
                                     output.itl.append(timestamp -
                                                       most_recent_timestamp)
 
-                                generated_text += delta["content"]
+                                generated_text += content
                                 token_count +=1
 
                             most_recent_timestamp = timestamp
@@ -558,7 +572,7 @@ def get_tokenizer(
 
 ASYNC_REQUEST_FUNCS = {
     "tgi": async_request_tgi,
-    "vllm": async_request_openai_completions,
+    "vllm": async_request_api_chat_completions,
     "lmdeploy": async_request_openai_completions,
     "deepspeed-mii": async_request_deepspeed_mii,
     "openai": async_request_openai_completions,
