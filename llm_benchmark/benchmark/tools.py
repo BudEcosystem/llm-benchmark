@@ -263,9 +263,11 @@ def run_benchmark(
     max_input_tokens: Optional[int] = None,
     min_output_tokens: Optional[int] = None,
     max_output_tokens: Optional[int] = None,
+    type: str = "chat"
 ):
     if benchmark_script != "litellm_proxy":
-        os.environ["OPENAI_API_KEY"] = "secret_abcdefg"
+        if "OPENAI_API_KEY" not in os.environ:
+            os.environ["OPENAI_API_KEY"] = "secret_abcdefg"
         os.environ["OPENAI_API_BASE"] = base_url
     
     sampled_prompts = combine_multiple_datasets(
@@ -305,7 +307,7 @@ def run_benchmark(
         input_deviation = (max_input_tokens - min_input_tokens)/2 if max_input_tokens is not None and min_input_tokens is not None else 0
         output_deviation = (max_output_tokens - min_output_tokens)/2 if max_output_tokens is not None and min_output_tokens is not None else 0
         result_output, individual_responses = llmperf_run_benchmark(
-            model, concurrency, concurrency, input_token, input_deviation, output_token, output_deviation, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id
+            model, concurrency, concurrency, input_token, input_deviation, output_token, output_deviation, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id, type=type
         )
         result_output, individual_responses = format_llmperf_result(result_output, individual_responses)
     elif benchmark_script == "budlatent":

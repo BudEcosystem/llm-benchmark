@@ -12,13 +12,11 @@ from uuid import UUID
 import pandas as pd
 import ray
 
-from .patch import construct_clients
+from .patch import construct_clients, RequestConfig
 from .requests_launcher import RequestsLauncher
 
 from llmperf import common_metrics
 from llmperf.common import SUPPORTED_APIS
-
-from llmperf.models import RequestConfig
 
 
 from .utils import (
@@ -47,6 +45,7 @@ def get_token_throughput_latencies(
     llm_api="openai",
     sampled_prompts: Optional[dict] = None,
     benchmark_id: Optional[UUID] = None,
+    type="chat"
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """Get the token throughput and latencies for the given model.
 
@@ -117,6 +116,7 @@ def get_token_throughput_latencies(
             prompt=prompts.pop(),
             sampling_params=default_sampling_params,
             llm_api=llm_api,
+            type=type
         )
         req_launcher.launch_requests(request_config, delay=0.1)
         # Retrieving results less frequently allows for more concurrent requests
@@ -310,6 +310,7 @@ def run_token_benchmark(
     test_timeout_s: int = 600,
     sampled_prompts: Optional[dict] = None,
     benchmark_id: Optional[UUID] = None,
+    type: str = "chat" # chat, completions
 ):
     """
     Args:
@@ -347,6 +348,7 @@ def run_token_benchmark(
         additional_sampling_params=json.loads(additional_sampling_params),
         sampled_prompts=sampled_prompts,
         benchmark_id=benchmark_id,
+        type=type
     )
 
     if results_dir:

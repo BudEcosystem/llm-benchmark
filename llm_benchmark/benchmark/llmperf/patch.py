@@ -1,7 +1,8 @@
+
 import json
 import os
 import time
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional, Tuple
 
 import ray
 import requests
@@ -12,9 +13,28 @@ from llmperf.ray_clients.sagemaker_client import SageMakerClient
 from llmperf.ray_clients.vertexai_client import VertexAIClient
 from llmperf.ray_llm_client import LLMClient
 
-from llmperf.models import RequestConfig
+from pydantic import BaseModel
 from llmperf import common_metrics
 
+
+class RequestConfig(BaseModel):
+    """The configuration for a request to the LLM API.
+
+    Args:
+        model: The model to use.
+        prompt: The prompt to provide to the LLM API.
+        sampling_params: Additional sampling parameters to send with the request.
+            For more information see the Router app's documentation for the completions
+        llm_api: The name of the LLM API to send the request to.
+        metadata: Additional metadata to attach to the request for logging or validation purposes.
+    """
+
+    model: str
+    prompt: Tuple
+    sampling_params: Optional[Dict[str, Any]] = None
+    llm_api: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    type: str = "chat"
 
 SUPPORTED_APIS = ["openai", "anthropic", "litellm"]
 
@@ -38,6 +58,8 @@ class OpenAIChatCompletionsClient(LLMClient):
             "stream": True,
             "ignore_eos":True
         }
+        if request_config.type == "completions":
+            body['prompt'] = prompt
         sampling_params = request_config.sampling_params
         body.update(sampling_params or {})
         time_to_next_token = []
@@ -68,7 +90,10 @@ class OpenAIChatCompletionsClient(LLMClient):
             raise ValueError("No host provided.")
         if not address.endswith("/"):
             address = address + "/"
-        address += "chat/completions"
+        if request_config.type == "chat":
+            address += "chat/completions"
+        else:
+            address += "completions"
         try:
             with requests.post(
                 address,
