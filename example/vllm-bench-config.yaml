@@ -1,0 +1,62 @@
+# Example configuration file for vllm_bench_runner.py
+# This file configures the vLLM bench serve command parameters
+
+# Model to benchmark (can be a single model or list of models)
+model: meta-llama/Llama-3.1-8B-Instruct
+# Alternatively, use a list to benchmark multiple models:
+# model:
+#   - meta-llama/Llama-3.1-8B-Instruct
+#   - mistralai/Mistral-7B-Instruct-v0.3
+
+# Base URL of the running vLLM server
+base_url: http://localhost:8000
+
+# Backend type (default: openai)
+backend: openai
+
+# Dataset name for benchmarking (default: random)
+# Options: random, sharegpt, sonnet
+dataset_name: random
+
+# Random seed for reproducibility
+seed: 1234
+
+# ===== TOKEN LENGTH CONFIGURATION =====
+# You can specify token lengths in two ways:
+
+# Option 1: Use token_pairs (RECOMMENDED - similar to auto_benchmark)
+# Each pair specifies "input_tokens,output_tokens"
+# This creates EXACTLY the specified pairs (no cartesian product)
+# Uncomment to use:
+token_pairs:
+  - 50,200
+  - 100,150
+  # - 200,300
+  # - 400,600
+  # - 800,1200
+
+# Option 2: Use separate input/output lists (creates all combinations)
+# This creates the cartesian product: input_len × output_len
+# Comment out these if using token_pairs above
+# random_input_len:
+#   - 400
+#   - 800
+#   - 1200
+
+# random_output_len:
+#   - 600
+#   - 1200
+
+# Maximum concurrency levels to test (can be single value or list)
+# Note: num_prompts will be set equal to max_concurrency
+max_concurrency:
+  - 1
+  - 8
+  # - 16
+  # - 32
+  # - 64
+  # - 128
+  # - 256
+
+# Directory to save benchmark results
+result_dir: ./vllm_bench_results
