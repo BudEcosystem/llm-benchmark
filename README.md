@@ -19,7 +19,7 @@ export OPENAI_API_KEY=fake-api-key
 ```
 
 ```bash
-python auto_bemchmark.py --model meta-llama/Meta-Llama-3-8B-Instruct --docker-image IMAGE_ID --input-tokens 100 --output-tokens 100 --concurrency 1
+PROFILER_RESULT_DIR=results python auto_benchmark.py --engine-config-file example/poc-config.yaml  --run-benchmark
 ```
 
 Litellm proxy benchmarking
