@@ -251,6 +251,8 @@ def run_benchmark(
     output_token: int,
     concurrency: int,
     benchmark_script: str,
+    endpoint:  str = "/chat/completions",
+    tokenizer: str = None,
     result_dir: str = None,
     run_id: str = None,
     profiler_result: bool = False,
@@ -297,7 +299,7 @@ def run_benchmark(
 
     if benchmark_script == "vllm":
         result_output, individual_responses = vllm_run_benchmark(
-            model, input_token, output_token, concurrency, base_url, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id
+            model, input_token, output_token, concurrency, base_url, sampled_prompts=sampled_prompts, benchmark_id=benchmark_id, endpoint=endpoint, tokenizer=tokenizer
         )
         # print(f"local model result_output: {result_output}" )
         result_output, individual_responses = format_vllm_result(result_output, individual_responses)

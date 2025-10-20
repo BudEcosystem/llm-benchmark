@@ -328,11 +328,33 @@ def sample_random_requests(
     )
     offsets = np.random.randint(0, tokenizer.vocab_size, size=num_prompts)
     input_requests = []
+    actual_input_lens = []
+
     for i in range(num_prompts):
-        prompt = tokenizer.decode(
-            [(offsets[i] + i + j) % tokenizer.vocab_size for j in range(input_lens[i])]
-        )
-        input_requests.append((prompt, int(input_lens[i]), int(output_lens[i]), None))
+        target_len = int(input_lens[i])
+        attempt_len = target_len
+        max_attempts = 10
+        prompt = ""
+        actual_len = 0
+
+        for attempt in range(max_attempts):
+            # Generate prompt from token IDs
+            token_ids = [(offsets[i] + i + j) % tokenizer.vocab_size for j in range(attempt_len)]
+            prompt = tokenizer.decode(token_ids)
+
+            # Verify actual token count when re-encoded
+            actual_tokens = tokenizer.encode(prompt, add_special_tokens=False)
+            actual_len = len(actual_tokens)
+
+            if actual_len == target_len:
+                break  # Perfect match
+            elif attempt < max_attempts - 1:
+                # Adjust for next attempt
+                adjustment = target_len - actual_len
+                attempt_len = max(1, attempt_len + adjustment)
+
+        actual_input_lens.append(actual_len)
+        input_requests.append((prompt, actual_len, int(output_lens[i]), None))
 
     return input_requests
 
@@ -1097,20 +1119,20 @@ def get_args():
     return args
 
 
-def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[dict] = None, benchmark_id: Optional[UUID] = None):
+def run_benchmark(model, input_len, output_len, num_prompts, base_url, endpoint, tokenizer: Optional[str] = None, sampled_prompts: Optional[dict] = None, benchmark_id: Optional[UUID] = None):
     # args = get_args()
     class BenchmarkArgs:
-        def __init__(self, model, input_len, output_len, num_prompts, base_url, sampled_prompts: Optional[dict] = None, benchmark_id: Optional[UUID] = None):
+        def __init__(self, model, input_len, output_len, num_prompts, base_url, endpoint, tokenizer: Optional[str] = None, sampled_prompts: Optional[dict] = None, benchmark_id: Optional[UUID] = None):
             self.model = model
-            self.tokenizer = "Qwen/Qwen2.5-0.5B-Instruct"
+            self.tokenizer = tokenizer if tokenizer else "Qwen/Qwen2.5-0.5B-Instruct"
             self.num_prompts = num_prompts
             self.seed = 42
             self.disable_tqdm = False
-            self.backend = "vllm"
+            self.backend = "openai" if endpoint == '/completions' else "vllm"
             self.percentile_metrics = "ttft,tpot,itl,e2el"
             self.metric_percentiles = "25,75,95,99"
             self.base_url = base_url
-            self.endpoint = "/chat/completions"
+            self.endpoint = endpoint
             self.best_of = 1
             self.use_beam_search = False
             self.dataset = None
@@ -1137,8 +1159,8 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url, sampled_p
             self.sampled_prompts = sampled_prompts
             self.benchmark_id = benchmark_id
 
-    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url, sampled_prompts, benchmark_id)
-
+    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url, endpoint, sampled_prompts, benchmark_id)
+    print(args)
     return main(args)
 
 

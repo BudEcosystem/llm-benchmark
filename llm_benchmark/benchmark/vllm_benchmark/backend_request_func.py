@@ -259,13 +259,13 @@ async def async_request_openai_completions(
         assert not request_func_input.use_beam_search
         payload = {
             "model": request_func_input.model,
-            # "prompt": request_func_input.prompt,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": request_func_input.prompt,
-                },
-            ],
+            "prompt": request_func_input.prompt,
+            # "messages": [
+            #     {
+            #         "role": "user",
+            #         "content": request_func_input.prompt,
+            #     },
+            # ],
             "temperature": 0.0,
             "best_of": request_func_input.best_of,
             "max_tokens": request_func_input.output_len,
@@ -298,6 +298,7 @@ async def async_request_openai_completions(
                                               "data: ")
                         if chunk == "[DONE]":
                             latency = time.perf_counter() - st
+                            break
                         else:
                             data = json.loads(chunk)
                             # print(data)
@@ -307,10 +308,10 @@ async def async_request_openai_completions(
                             # INSERT_YOUR_CODE
                             # Take content from either content or reasoning_content
                             content = None
-                            if "content" in data["choices"][0]["delta"]:
-                                content = data["choices"][0]["delta"]["content"]
-                            elif "reasoning_content" in data["choices"][0]["delta"]:
-                                content = data["choices"][0]["delta"]["reasoning_content"]
+                            if "text" in data["choices"][0]:
+                                content = data["choices"][0]["text"]
+                            # elif "reasoning_content" in data["choices"][0]["delta"]:
+                            #     content = data["choices"][0]["delta"]["reasoning_content"]
                             if content is not None:
                                 timestamp = time.perf_counter()
                                 # First token
@@ -326,16 +327,13 @@ async def async_request_openai_completions(
                                 most_recent_timestamp = timestamp
                                 generated_text += content
                                 token_count += 1
-                                
+
                     output.generated_text = generated_text
                     output.success = True
                     output.latency = latency
                     if token_count > 1:
                         output.tpot = ((latency - ttft) / (token_count - 1))
                     output.req_output_throughput = token_count/latency
-                else:
-                    output.error = response.reason or ""
-                    output.success = False
         except Exception:
             output.success = False
             exc_info = sys.exc_info()
