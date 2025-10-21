@@ -16,6 +16,71 @@ from transformers import (AutoTokenizer, PreTrainedTokenizer,
 AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60)
 
 
+class StreamedResponseHandler:
+    """Handles buffering of incomplete chunks from streaming responses.
+
+    This prevents errors when JSON messages or SSE events are split across
+    multiple network chunks, especially when chunk sizes are large.
+    """
+
+    def __init__(self):
+        self.buffer = ""
+
+    def add_chunk(self, chunk_bytes: bytes) -> List[str]:
+        """Add a chunk of bytes to the buffer and return any complete messages.
+
+        Args:
+            chunk_bytes: Raw bytes from the streaming response
+
+        Returns:
+            List of complete SSE messages (with 'data: ' prefix intact)
+        """
+        chunk_str = chunk_bytes.decode("utf-8")
+        self.buffer += chunk_str
+
+        messages = []
+
+        # Split by double newlines (SSE message separator)
+        while "\n\n" in self.buffer:
+            message, self.buffer = self.buffer.split("\n\n", 1)
+            message = message.strip()
+            if message:
+                messages.append(message)
+
+        # Check if buffer contains a complete message without \n\n
+        # This handles cases where the last message doesn't have trailing \n\n
+        if self.buffer.strip():
+            # Check for 'data: ' prefix (SSE format)
+            if self.buffer.strip().startswith("data: "):
+                message_content = self.buffer.strip().removeprefix("data: ").strip()
+
+                # Special case: [DONE] marker
+                if message_content == "[DONE]":
+                    messages.append(self.buffer.strip())
+                    self.buffer = ""
+                # Try to validate JSON completeness
+                elif message_content:
+                    try:
+                        json.loads(message_content)
+                        # JSON is complete, safe to process
+                        messages.append(self.buffer.strip())
+                        self.buffer = ""
+                    except json.JSONDecodeError:
+                        # Incomplete JSON, wait for more chunks
+                        pass
+            # Handle non-SSE format (plain JSON)
+            elif self.buffer.strip().startswith("{"):
+                try:
+                    json.loads(self.buffer.strip())
+                    messages.append(self.buffer.strip())
+                    self.buffer = ""
+                except json.JSONDecodeError:
+                    # Incomplete JSON, wait for more chunks
+                    pass
+
+        return messages
+
+
 @dataclass
 class RequestFuncInput:
     prompt: str
@@ -78,32 +143,35 @@ async def async_request_tgi(
         try:
             async with session.post(url=api_url, json=payload) as response:
                 if response.status == 200:
-                    async for chunk_bytes in response.content:
+                    handler = StreamedResponseHandler()
+                    async for chunk_bytes in response.content.iter_any():
                         chunk_bytes = chunk_bytes.strip()
                         if not chunk_bytes:
                             continue
-                        chunk_bytes = chunk_bytes.decode("utf-8")
 
-                        #NOTE: Sometimes TGI returns a ping response without
-                        # any data, we should skip it.
-                        if chunk_bytes.startswith(":"):
-                            continue
-                        chunk = remove_prefix(chunk_bytes, "data:")
+                        # Get complete messages from handler
+                        messages = handler.add_chunk(chunk_bytes)
+                        for message in messages:
+                            #NOTE: Sometimes TGI returns a ping response without
+                            # any data, we should skip it.
+                            if message.startswith(":"):
+                                continue
 
-                        data = json.loads(chunk)
-                        timestamp = time.perf_counter()
-                        token_count +=1
-                        # First token
-                        if ttft == 0.0:
-                            ttft = time.perf_counter() - st
-                            output.ttft = ttft
+                            chunk = remove_prefix(message, "data:")
+                            data = json.loads(chunk)
+                            timestamp = time.perf_counter()
+                            token_count +=1
+                            # First token
+                            if ttft == 0.0:
+                                ttft = time.perf_counter() - st
+                                output.ttft = ttft
 
-                        # Decoding phase
-                        else:
-                            output.itl.append(timestamp -
-                                              most_recent_timestamp)
+                            # Decoding phase
+                            else:
+                                output.itl.append(timestamp -
+                                                  most_recent_timestamp)
 
-                        most_recent_timestamp = timestamp
+                            most_recent_timestamp = timestamp
                     
                     latency = most_recent_timestamp - st
                     output.latency = latency
@@ -156,29 +224,32 @@ async def async_request_trt_llm(
         try:
             async with session.post(url=api_url, json=payload) as response:
                 if response.status == 200:
-                    async for chunk_bytes in response.content:
+                    handler = StreamedResponseHandler()
+                    async for chunk_bytes in response.content.iter_any():
                         chunk_bytes = chunk_bytes.strip()
                         if not chunk_bytes:
                             continue
 
-                        chunk = remove_prefix(chunk_bytes.decode("utf-8"),
-                                              "data:")
+                        # Get complete messages from handler
+                        messages = handler.add_chunk(chunk_bytes)
+                        for message in messages:
+                            chunk = remove_prefix(message, "data:")
 
-                        data = json.loads(chunk)
-                        output.generated_text += data["text_output"]
-                        timestamp = time.perf_counter()
-                        token_count+=1
-                        # First token
-                        if ttft == 0.0:
-                            ttft = time.perf_counter() - st
-                            output.ttft = ttft
+                            data = json.loads(chunk)
+                            output.generated_text += data["text_output"]
+                            timestamp = time.perf_counter()
+                            token_count+=1
+                            # First token
+                            if ttft == 0.0:
+                                ttft = time.perf_counter() - st
+                                output.ttft = ttft
 
-                        # Decoding phase
-                        else:
-                            output.itl.append(timestamp -
-                                              most_recent_timestamp)
+                            # Decoding phase
+                            else:
+                                output.itl.append(timestamp -
+                                                  most_recent_timestamp)
 
-                        most_recent_timestamp = timestamp
+                            most_recent_timestamp = timestamp
 
                     latency = most_recent_timestamp - st
                     output.latency = latency
@@ -286,48 +357,58 @@ async def async_request_openai_completions(
         ttft = 0.0
         st = time.perf_counter()
         most_recent_timestamp = st
+        latency = 0.0
         try:
             async with session.post(url=api_url, json=payload,
                                     headers=headers) as response:
                 if response.status == 200:
-                    async for chunk_bytes in response.content:
+                    handler = StreamedResponseHandler()
+                    done = False
+                    async for chunk_bytes in response.content.iter_any():
                         chunk_bytes = chunk_bytes.strip()
                         if not chunk_bytes:
                             continue
 
-                        chunk = remove_prefix(chunk_bytes.decode("utf-8"),
-                                              "data: ")
-                        if chunk == "[DONE]":
-                            latency = time.perf_counter() - st
+                        # Get complete messages from handler
+                        messages = handler.add_chunk(chunk_bytes)
+                        for message in messages:
+                            chunk = remove_prefix(message, "data: ")
+                            if chunk == "[DONE]":
+                                latency = time.perf_counter() - st
+                                done = True
+                                break
+                            else:
+                                data = json.loads(chunk)
+                                # print(data)
+                                # NOTE: Some completion API might have a last
+                                # usage summary response without a token so we
+                                # want to check a token was generated
+                                # INSERT_YOUR_CODE
+                                # Take content from either content or reasoning_content
+                                content = None
+                                if "text" in data["choices"][0]:
+                                    content = data["choices"][0]["text"]
+                                # elif "reasoning_content" in data["choices"][0]["delta"]:
+                                #     content = data["choices"][0]["delta"]["reasoning_content"]
+                                if content is not None:
+                                    timestamp = time.perf_counter()
+                                    # First token
+                                    if ttft == 0.0:
+                                        ttft = time.perf_counter() - st
+                                        output.ttft = ttft
+
+                                    # Decoding phase
+                                    else:
+                                        output.itl.append(timestamp -
+                                                          most_recent_timestamp)
+
+                                    most_recent_timestamp = timestamp
+                                    generated_text += content
+                                    token_count += 1
+
+                        # Break from outer loop when [DONE] is encountered
+                        if done:
                             break
-                        else:
-                            data = json.loads(chunk)
-                            # print(data)
-                            # NOTE: Some completion API might have a last
-                            # usage summary response without a token so we
-                            # want to check a token was generated
-                            # INSERT_YOUR_CODE
-                            # Take content from either content or reasoning_content
-                            content = None
-                            if "text" in data["choices"][0]:
-                                content = data["choices"][0]["text"]
-                            # elif "reasoning_content" in data["choices"][0]["delta"]:
-                            #     content = data["choices"][0]["delta"]["reasoning_content"]
-                            if content is not None:
-                                timestamp = time.perf_counter()
-                                # First token
-                                if ttft == 0.0:
-                                    ttft = time.perf_counter() - st
-                                    output.ttft = ttft
-
-                                # Decoding phase
-                                else:
-                                    output.itl.append(timestamp -
-                                                      most_recent_timestamp)
-
-                                most_recent_timestamp = timestamp
-                                generated_text += content
-                                token_count += 1
 
                     output.generated_text = generated_text
                     output.success = True
@@ -474,47 +555,58 @@ async def async_request_api_chat_completions(
         st = time.perf_counter()
         most_recent_timestamp = st
         token_count = 0
+        latency = 0.0
         try:
             async with session.post(url=api_url, json=payload,
                                     headers=headers) as response:
                 request_duration = time.perf_counter() - st
                 if response.status == 200:
-                    async for chunk_bytes in response.content:
+                    handler = StreamedResponseHandler()
+                    done = False
+                    async for chunk_bytes in response.content.iter_any():
                         chunk_bytes = chunk_bytes.strip()
                         if not chunk_bytes:
                             continue
 
-                        chunk = remove_prefix(chunk_bytes.decode("utf-8"),
-                                              "data: ")
-                        if chunk == "[DONE]":
-                            latency = time.perf_counter() - st
-                        else:
-                            timestamp = time.perf_counter()
-                            data = json.loads(chunk)
+                        # Get complete messages from handler
+                        messages = handler.add_chunk(chunk_bytes)
+                        for message in messages:
+                            chunk = remove_prefix(message, "data: ")
+                            if chunk == "[DONE]":
+                                latency = time.perf_counter() - st
+                                done = True
+                                break
+                            else:
+                                timestamp = time.perf_counter()
+                                data = json.loads(chunk)
 
-                            delta = data["choices"][0]["delta"]
-                            # INSERT_YOUR_CODE
-                            # Take content from either content or reasoning_content
-                            content = None
-                            if "content" in delta:
-                                content = delta["content"]
-                            elif "reasoning_content" in delta:
-                                content = delta["reasoning_content"]
-                            if content is not None:
-                                # First token
-                                if ttft == 0.0:
-                                    ttft = time.perf_counter() - st
-                                    output.ttft = ttft
+                                delta = data["choices"][0]["delta"]
+                                # INSERT_YOUR_CODE
+                                # Take content from either content or reasoning_content
+                                content = None
+                                if "content" in delta:
+                                    content = delta["content"]
+                                elif "reasoning_content" in delta:
+                                    content = delta["reasoning_content"]
+                                if content is not None:
+                                    # First token
+                                    if ttft == 0.0:
+                                        ttft = time.perf_counter() - st
+                                        output.ttft = ttft
 
-                                # Decoding phase
-                                else:
-                                    output.itl.append(timestamp -
-                                                      most_recent_timestamp)
+                                    # Decoding phase
+                                    else:
+                                        output.itl.append(timestamp -
+                                                          most_recent_timestamp)
 
-                                generated_text += content
-                                token_count +=1
+                                    generated_text += content
+                                    token_count +=1
 
-                            most_recent_timestamp = timestamp
+                                most_recent_timestamp = timestamp
+
+                        # Break from outer loop when [DONE] is encountered
+                        if done:
+                            break
                     
                     total_request_time = time.perf_counter() - st        
                     output.generated_text = generated_text
