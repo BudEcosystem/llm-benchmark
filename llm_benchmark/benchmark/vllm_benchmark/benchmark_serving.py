@@ -1159,7 +1159,7 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url, endpoint,
             self.sampled_prompts = sampled_prompts
             self.benchmark_id = benchmark_id
 
-    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url, endpoint, sampled_prompts, benchmark_id)
+    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url, endpoint, tokenizer, sampled_prompts, benchmark_id)
     print(args)
     return main(args)
 
