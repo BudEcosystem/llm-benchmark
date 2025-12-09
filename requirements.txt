@@ -19,3 +19,4 @@ pyarrow
 modelscope==1.24.0
 addict
 locust
+transformers[sentencepiece]
