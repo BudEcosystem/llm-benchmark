@@ -265,13 +265,30 @@ def run_benchmark(
     max_input_tokens: Optional[int] = None,
     min_output_tokens: Optional[int] = None,
     max_output_tokens: Optional[int] = None,
+    num_prompts: Optional[int] = None,
 ):
+    """Run a benchmark test.
+
+    :param num_prompts: Total number of prompts to run. If None and datasets provided,
+                       uses sum of dataset num_samples. If None and no datasets,
+                       uses concurrency value for backward compatibility.
+    :param concurrency: Maximum number of concurrent requests.
+    """
     if benchmark_script != "litellm_proxy":
         os.environ["OPENAI_API_KEY"] = "secret_abcdefg"
         os.environ["OPENAI_API_BASE"] = base_url
-    
+
+    # Calculate num_prompts if not provided
+    if num_prompts is None:
+        if datasets:
+            # Sum of num_samples from all datasets
+            num_prompts = sum(d.get("num_samples", concurrency) for d in datasets)
+        else:
+            # Backward compatibility: use concurrency if no datasets
+            num_prompts = concurrency
+
     sampled_prompts = combine_multiple_datasets(
-        concurrency,
+        num_prompts,
         seed,
         datasets
     )

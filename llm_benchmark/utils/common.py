@@ -120,10 +120,16 @@ def sample_from_dataset(dataset_files, sample_size):
     return sampled_prompts
 
 
-def distribute_samples_evenly(datasets, concurrency):
+def distribute_samples_evenly(datasets, num_prompts):
+    """Distribute total prompts evenly across datasets.
+
+    :param datasets: List of dataset objects.
+    :param num_prompts: Total number of prompts to distribute.
+    :return: Mapping of dataset ID to number of samples.
+    """
     num_datasets = len(datasets)
-    base_samples_per_dataset = concurrency // num_datasets
-    remainder = concurrency % num_datasets  # Remaining samples to distribute
+    base_samples_per_dataset = num_prompts // num_datasets
+    remainder = num_prompts % num_datasets  # Remaining samples to distribute
 
     dataset_samples_mapping = {}
 
@@ -203,24 +209,24 @@ def get_formatted_samples_from_dataset(data: list, dataset, dataset_sample_size:
             
 
 def combine_multiple_datasets(
-    concurrency: int,
+    num_prompts: int,
     seed: Optional[int] = None,
     datasets: Optional[list] = None,
     ) -> Optional[dict]:
     """
     Efficiently sample prompts from multiple datasets without loading entire datasets into memory.
-    
-    # :param datasets: List of dataset paths (each dataset is a list of files).
+
+    :param num_prompts: Total number of prompts to select from all datasets.
+    :param seed: Random seed for reproducibility.
     :param datasets: List of dataset objects.
-    :param concurrency: Total number of prompts to select.
-    :return: List of sampled prompts.
+    :return: Dict mapping dataset IDs to list of sampled prompts.
     """
     if not datasets:
         return None
 
     random.seed(seed)
 
-    dataset_samples_mapping = distribute_samples_evenly(datasets, concurrency)
+    dataset_samples_mapping = distribute_samples_evenly(datasets, num_prompts)
 
     combined_data = {}
     
