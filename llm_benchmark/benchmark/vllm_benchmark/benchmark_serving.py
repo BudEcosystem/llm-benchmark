@@ -504,6 +504,7 @@ async def benchmark(
     best_of: int,
     use_beam_search: bool,
     request_rate: float,
+    concurrency: int,
     disable_tqdm: bool,
     profile: bool,
     selected_percentiles: List[str],
@@ -551,8 +552,17 @@ async def benchmark(
             print("Profiler started")
 
     print(f"Traffic request rate: {request_rate}")
+    print(f"Max concurrent requests: {concurrency}")
 
     pbar = None if disable_tqdm else tqdm(total=len(input_requests))
+
+    # Create semaphore to limit concurrent requests
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def limited_request(request_func_input, pbar):
+        """Wrapper to limit concurrent requests using semaphore."""
+        async with semaphore:
+            return await request_func(request_func_input=request_func_input, pbar=pbar)
 
     benchmark_start_time = time.perf_counter()
     tasks: List[asyncio.Task] = []
@@ -571,7 +581,7 @@ async def benchmark(
         )
         tasks.append(
             asyncio.create_task(
-                request_func(request_func_input=request_func_input, pbar=pbar)
+                limited_request(request_func_input, pbar)
             )
         )
     outputs: List[RequestFuncOutput] = await asyncio.gather(*tasks)
@@ -849,6 +859,7 @@ def main(args: argparse.Namespace):
             best_of=args.best_of,
             use_beam_search=args.use_beam_search,
             request_rate=args.request_rate,
+            concurrency=args.concurrency,
             disable_tqdm=args.disable_tqdm,
             profile=args.profile,
             selected_percentiles=[float(p) for p in args.metric_percentiles.split(",")],
@@ -869,7 +880,7 @@ def main(args: argparse.Namespace):
     result_json["num_prompts"] = args.num_prompts
     result_json["input_tokens"] = args.random_input_len
     result_json["output_tokens"] = args.random_output_len
-    result_json["concurrency"] = args.num_prompts
+    result_json["concurrency"] = args.concurrency
 
     # Metadata
     if args.metadata:
@@ -1119,13 +1130,18 @@ def get_args():
     return args
 
 
-def run_benchmark(model, input_len, output_len, num_prompts, base_url, endpoint, tokenizer: Optional[str] = None, sampled_prompts: Optional[dict] = None, benchmark_id: Optional[UUID] = None):
+def run_benchmark(model, input_len, output_len, concurrency, base_url, endpoint, tokenizer: Optional[str] = None, sampled_prompts: Optional[dict] = None, benchmark_id: Optional[UUID] = None):
     # args = get_args()
     class BenchmarkArgs:
-        def __init__(self, model, input_len, output_len, num_prompts, base_url, endpoint, tokenizer: Optional[str] = None, sampled_prompts: Optional[dict] = None, benchmark_id: Optional[UUID] = None):
+        def __init__(self, model, input_len, output_len, concurrency, base_url, endpoint, tokenizer: Optional[str] = None, sampled_prompts: Optional[dict] = None, benchmark_id: Optional[UUID] = None):
             self.model = model
             self.tokenizer = tokenizer if tokenizer else "Qwen/Qwen2.5-0.5B-Instruct"
-            self.num_prompts = num_prompts
+            # Total prompts from sampled data (sum of all prompts across all datasets)
+            if sampled_prompts:
+                self.num_prompts = sum(len(prompts) for prompts in sampled_prompts.values())
+            else:
+                self.num_prompts = concurrency
+            self.concurrency = concurrency  # Max concurrent requests
             self.seed = 42
             self.disable_tqdm = False
             self.backend = "openai" if endpoint == '/completions' else "vllm"
@@ -1159,7 +1175,7 @@ def run_benchmark(model, input_len, output_len, num_prompts, base_url, endpoint,
             self.sampled_prompts = sampled_prompts
             self.benchmark_id = benchmark_id
 
-    args = BenchmarkArgs(model, input_len, output_len, num_prompts, base_url, endpoint, tokenizer, sampled_prompts, benchmark_id)
+    args = BenchmarkArgs(model, input_len, output_len, concurrency, base_url, endpoint, tokenizer, sampled_prompts, benchmark_id)
     print(args)
     return main(args)
 
