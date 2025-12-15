@@ -754,7 +754,7 @@ def main(args: argparse.Namespace):
         input_requests = transform_sampled_prompts(
             sampled_prompts,
             tokenizer,
-            fixed_output_len=args.mean_output_len
+            fixed_output_len=None  # Use actual completion lengths from dataset
         )
 
     elif args.dataset is not None:
